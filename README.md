@@ -32,7 +32,6 @@ FINANCE_APP_PIN=
 APP_BASE_URL=https://your-finance-app.vercel.app
 
 SLACK_BOT_TOKEN=
-SLACK_SIGNING_SECRET=
 SLACK_FINANCE_PAYROLL_CHANNEL_ID=
 
 CRON_SECRET=
@@ -55,16 +54,9 @@ The app posts to `finance-payroll-ot-temp` through `SLACK_FINANCE_PAYROLL_CHANNE
 Required bot scopes:
 
 - `chat:write`
-- `commands` is optional
 - `files:write` is not required for the first version because PDFs download from the app; add it later if PDF uploads to Slack are enabled.
 
-For interactive Approve / Reject / Request Correction buttons, set the Slack Interactivity Request URL to:
-
-```text
-https://your-finance-app.vercel.app/api/slack-interactions
-```
-
-Set the Slack signing secret in Vercel. Approve is one-click; Reject and Request Correction open a Slack comment modal and write the action to the database audit log.
+Slack notifications currently include a safe View Submission link only. Slack approve/reject buttons and signing-secret verification are intentionally postponed until the Slack app is connected later.
 
 ## Daily reminder scheduler
 

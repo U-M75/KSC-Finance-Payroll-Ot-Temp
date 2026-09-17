@@ -43,12 +43,7 @@ export async function sendNewEntryNotification(entry) {
       { type: 'mrkdwn', text: `*Hours*\nRegular ${entry.regular_hours} · OT ${entry.overtime_hours} · DT ${entry.double_time_hours}` },
     ] },
     { type: 'context', elements: [{ type: 'mrkdwn', text: `Submission *${slackSafe(entry.submission_number)}* · Submitted by ${slackSafe(entry.submitted_by_name)}` }] },
-    { type: 'actions', elements: [
-      ...(url ? [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] : []),
-      { type: 'button', text: { type: 'plain_text', text: 'Approve', emoji: true }, style: 'primary', action_id: 'finance_approve', value: entry.id },
-      { type: 'button', text: { type: 'plain_text', text: 'Reject', emoji: true }, style: 'danger', action_id: 'finance_reject', value: entry.id },
-      { type: 'button', text: { type: 'plain_text', text: 'Request Correction', emoji: true }, action_id: 'finance_correction', value: entry.id },
-    ] },
+    ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : []),
   ]
   return sendFinanceSlack({ text, blocks })
 }
