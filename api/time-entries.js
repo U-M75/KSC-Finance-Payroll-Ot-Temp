@@ -53,7 +53,7 @@ async function lookupNames(supabase, body) {
   return result
 }
 
-async function entryQuery(supabase) {
+function entryQuery(supabase) {
   return supabase.from('finance_time_entries').select('*, finance_pay_periods(start_date,end_date,status), finance_departments(name,code)').order('created_at', { ascending: false }).limit(2000)
 }
 
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
         if (error) throw error
         return res.status(200).json({ entry: decorate(data) })
       }
-      let query = await entryQuery(supabase)
+      let query = entryQuery(supabase)
       const q = clean(req.query?.q)
       const status = clean(req.query?.status)
       const type = clean(req.query?.entry_type)
