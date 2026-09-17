@@ -70,11 +70,28 @@ export async function sendStatusNotification(entry, status, actorName, comment =
 
 export async function sendDailyReminder() {
   const url = clean(process.env.APP_BASE_URL).replace(/\/$/, '')
+  const reminderText = [
+    PINK_LINE,
+    '*Daily Reminder: OT & Temp Sheet Submission*',
+    PINK_LINE,
+    '',
+    'Hey <!channel>!',
+    '',
+    'Just a quick reminder to *update, complete, and submit* your OT and Temp forms for today.',
+    '',
+    'Keeping these updated daily ensures smooth tracking and avoids any delays or confusion.',
+    '',
+    'Please make sure everything is filled out and submitted before the end of the day.',
+    '',
+    'Thanks for your cooperation!',
+    '',
+    PINK_LINE,
+  ].join('\\n')
   const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*DAILY OT & TEMP TIMECARD REMINDER*\n${PINK_LINE}\n\nPlease review and submit today\'s OT and temporary-worker timecard information before the end of the day.` } },
+    { type: 'section', text: { type: 'mrkdwn', text: reminderText } },
     ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Open Timecard App', emoji: true }, url, action_id: 'finance_open_app' }] }] : []),
   ]
-  return sendFinanceSlack({ text: 'Daily OT & Temp Timecard Reminder', blocks })
+  return sendFinanceSlack({ text: reminderText, blocks })
 }
 
 export { slackApi }
