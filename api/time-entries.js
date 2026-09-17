@@ -6,7 +6,8 @@ const OPEN_STATUSES = ['Submitted', 'Pending Approval', 'Needs Correction']
 
 function periodLabel(period) {
   if (!period?.start_date || !period?.end_date) return '—'
-  return `${period.start_date} → ${period.end_date}`
+  const schedule = period.period_type === 'Employee OT' ? 'Tue–Mon OT' : 'Mon–Fri Temp'
+  return `${period.start_date} → ${period.end_date} · ${schedule}`
 }
 
 function decorate(row) {
@@ -54,7 +55,7 @@ async function lookupNames(supabase, body) {
 }
 
 function entryQuery(supabase) {
-  return supabase.from('finance_time_entries').select('*, finance_pay_periods(start_date,end_date,status), finance_departments(name,code)').order('created_at', { ascending: false }).limit(2000)
+  return supabase.from('finance_time_entries').select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').order('created_at', { ascending: false }).limit(2000)
 }
 
 export default async function handler(req, res) {
@@ -64,7 +65,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const singleId = clean(req.query?.id)
       if (singleId) {
-        const { data, error } = await supabase.from('finance_time_entries').select('*, finance_pay_periods(start_date,end_date,status), finance_departments(name,code)').eq('id', singleId).single()
+        const { data, error } = await supabase.from('finance_time_entries').select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').eq('id', singleId).single()
         if (error) throw error
         return res.status(200).json({ entry: decorate(data) })
       }
@@ -146,7 +147,7 @@ export default async function handler(req, res) {
         notes: body.notes || null,
         status,
       }
-      const { data: saved, error: insertError } = await supabase.from('finance_time_entries').insert(payload).select('*, finance_pay_periods(start_date,end_date,status), finance_departments(name,code)').single()
+      const { data: saved, error: insertError } = await supabase.from('finance_time_entries').insert(payload).select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').single()
       if (insertError) throw insertError
       const entry = decorate(saved)
       await audit(supabase, { timeEntryId: saved.id, ...currentActor, action: status === 'Draft' ? 'Record created as draft' : 'Record submitted', newValue: saved, comment: body.representation_reason || null })
@@ -160,7 +161,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       if (!body.id) return res.status(400).json({ error: 'Submission id is required.' })
-      const { data: old, error: oldError } = await supabase.from('finance_time_entries').select('*, finance_pay_periods(start_date,end_date,status), finance_departments(name,code)').eq('id', body.id).single()
+      const { data: old, error: oldError } = await supabase.from('finance_time_entries').select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').eq('id', body.id).single()
       if (oldError) throw oldError
       const oldEntry = decorate(old)
       const requestedStatus = clean(body.status)
@@ -186,7 +187,7 @@ export default async function handler(req, res) {
       }
       if (!Object.keys(update).length) return res.status(400).json({ error: 'No changes provided.' })
       update.updated_at = new Date().toISOString()
-      const { data: saved, error: updateError } = await supabase.from('finance_time_entries').update(update).eq('id', body.id).select('*, finance_pay_periods(start_date,end_date,status), finance_departments(name,code)').single()
+      const { data: saved, error: updateError } = await supabase.from('finance_time_entries').update(update).eq('id', body.id).select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').single()
       if (updateError) throw updateError
       const entry = decorate(saved)
       await audit(supabase, { timeEntryId: saved.id, ...currentActor, action: requestedStatus && requestedStatus !== old.status ? `Status changed to ${saved.status}` : 'Record edited', oldValue: oldEntry, newValue: entry, comment: body.comment || null })

@@ -73,6 +73,7 @@ create table if not exists public.finance_temp_workers (
 
 create table if not exists public.finance_pay_periods (
   id uuid primary key default gen_random_uuid(),
+  period_type text not null default 'Temp Timecard' check (period_type in ('Temp Timecard','Employee OT')),
   start_date date not null,
   end_date date not null,
   status text not null default 'Open' check (status in ('Open','Submission Deadline Approaching','Closed','Processing','Processed')),
@@ -177,6 +178,9 @@ create table if not exists public.finance_settings (
   updated_at timestamptz not null default now()
 );
 
+create unique index if not exists finance_pay_periods_type_dates_unique_idx
+  on public.finance_pay_periods(period_type, start_date, end_date);
+
 create index if not exists finance_time_entries_status_idx on public.finance_time_entries(status);
 create index if not exists finance_time_entries_period_idx on public.finance_time_entries(pay_period_id);
 create index if not exists finance_time_entries_department_idx on public.finance_time_entries(department_id);
@@ -189,31 +193,5 @@ insert into storage.buckets (id, name, public)
 values ('finance-payroll-documents', 'finance-payroll-documents', false)
 on conflict (id) do nothing;
 
--- Seed directory data. These are safe demonstration values and can be edited in the app.
-insert into public.finance_departments (name, code) values
-  ('Picking','PICKING'), ('Shipping','SHIP'), ('Inventory','INV')
-on conflict (name) do nothing;
-insert into public.finance_temp_agencies (name) values ('Employnet')
-on conflict (name) do nothing;
-
--- Sample pay period and temp workers are intentionally separate from production submissions.
-insert into public.finance_pay_periods (start_date, end_date, status, submission_deadline, payroll_processing_date, notes)
-select '2026-09-07', '2026-09-11', 'Open', '2026-09-11 23:59:59+00', '2026-09-14', 'Sample pay period from the current Slack workflow.'
-where not exists (select 1 from public.finance_pay_periods where start_date = '2026-09-07' and end_date = '2026-09-11');
-
-insert into public.finance_temp_workers (name, agency_id, worker_id, department_id, supervisor_name, status)
-select v.name, a.id, v.worker_id, d.id, v.supervisor, 'Active'
-from (values
-  ('Shelly Snyder','EMP-001','Picking','Sandra Pena'),
-  ('Matt Christy','EMP-002','Picking','Sandra Pena'),
-  ('Tara Flores','EMP-003','Picking','Sandra Pena'),
-  ('Lamar Gayle','EMP-004','Shipping','Carla'),
-  ('Teizjharay Toalepai','EMP-005','Inventory','Chris Green'),
-  ('Noe Keliikoa','EMP-006','Inventory','Chris Green')
-) as v(name, worker_id, department, supervisor)
-join public.finance_temp_agencies a on a.name = 'Employnet'
-join public.finance_departments d on d.name = v.department
-where not exists (select 1 from public.finance_temp_workers w where w.name = v.name and w.worker_id = v.worker_id);
-
--- Development/demo seed entries are omitted so production can start clean.
--- Add sample records from the UI or use the optional seed script in README.
+-- Production schema intentionally starts with empty directories and no demo records.
+-- Optional demonstration data is in supabase-finance-payroll-seed.sql and should not be run for a fresh client handoff.

@@ -43,9 +43,10 @@ The selected first version uses a shared PIN plus role selection. This is intent
 ## Supabase setup
 
 1. Create a separate Supabase project for Finance/Payroll.
-2. Run `supabase-finance-payroll-schema.sql` in the SQL editor.
-3. Optional: run `supabase-finance-payroll-seed.sql` in a demo/staging project to create the six sample workers/timecards.
+2. Run `supabase-finance-payroll-schema.sql` in the SQL editor. This production schema starts empty.
+3. Optional: run `supabase-finance-payroll-seed.sql` only in a demo/staging project to create the six sample workers/timecards.
 4. The SQL creates the directory tables, pay periods, time entries, approvals, audit logs, notifications and private document bucket.
+5. If demo data was already inserted and the client needs a blank handoff, run `supabase-finance-payroll-clean-all-data.sql` once. It deletes rows and stored documents but keeps the schema.
 
 ## Slack setup
 
@@ -77,7 +78,11 @@ Use an external scheduler during testing, then configure business days and remin
 - Submit moves the record to `Pending Approval`.
 - Supervisor can approve, reject or request correction.
 - Payroll can process approved records and export CSV.
+- Temp timecards use a Monday–Friday weekly pay period.
+- Employee OT uses a Tuesday–Monday weekly pay period.
+- Admin/Payroll can generate all 52 weekly periods for a selected year; submission forms show a matching dropdown.
 - The timecard PDF can be generated from the record detail page.
+- Slack messages currently use a `:pinkline:` branded separator and a View Submission link; interactive Slack approvals can be connected later.
 - QuickBooks is modular and safely remains `Ready for Export` until a live adapter is configured; the app never fakes a successful export.
 - Audit entries are created for submissions, edits, approvals, corrections and QuickBooks preparation.
 

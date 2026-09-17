@@ -4,6 +4,8 @@ function slackSafe(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+const PINK_LINE = ':pinkline:'
+
 function appUrl(entryId) {
   const base = clean(process.env.APP_BASE_URL).replace(/\/$/, '')
   return base ? `${base}/?view=entry&id=${encodeURIComponent(entryId)}` : ''
@@ -34,8 +36,7 @@ export async function sendNewEntryNotification(entry) {
   const url = appUrl(entry.id)
   const text = `New ${entry.entry_type} submitted: ${subject || 'Unknown worker'} (${entry.submission_number})`
   const blocks = [
-    { type: 'header', text: { type: 'plain_text', text: `New ${entry.entry_type} Submitted`, emoji: true } },
-    { type: 'section', text: { type: 'mrkdwn', text: `*${slackSafe(subject)}* is waiting for supervisor review.` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*NEW ${entry.entry_type.toUpperCase()} SUBMITTED*\n${PINK_LINE}\n\n*${slackSafe(subject)}* is waiting for supervisor review.` } },
     { type: 'section', fields: [
       { type: 'mrkdwn', text: `*Pay Period*\n${slackSafe(entry.period_label || 'Not set')}` },
       { type: 'mrkdwn', text: `*Department*\n${slackSafe(entry.department_name_snapshot || 'Not set')}` },
@@ -43,6 +44,7 @@ export async function sendNewEntryNotification(entry) {
       { type: 'mrkdwn', text: `*Hours*\nRegular ${entry.regular_hours} · OT ${entry.overtime_hours} · DT ${entry.double_time_hours}` },
     ] },
     { type: 'context', elements: [{ type: 'mrkdwn', text: `Submission *${slackSafe(entry.submission_number)}* · Submitted by ${slackSafe(entry.submitted_by_name)}` }] },
+    { type: 'section', text: { type: 'mrkdwn', text: PINK_LINE } },
     ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : []),
   ]
   return sendFinanceSlack({ text, blocks })
@@ -53,13 +55,14 @@ export async function sendStatusNotification(entry, status, actorName, comment =
   const url = appUrl(entry.id)
   const text = `${entry.submission_number} is now ${status}`
   const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text: `:large_pink_circle: *${slackSafe(entry.submission_number)}* — *${slackSafe(status)}*\n${slackSafe(subject)} · ${slackSafe(entry.department_name_snapshot || '')}` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*${slackSafe(entry.submission_number)}* — *${slackSafe(status)}*\n${slackSafe(subject)} · ${slackSafe(entry.department_name_snapshot || '')}\n${PINK_LINE}` } },
     { type: 'section', fields: [
       { type: 'mrkdwn', text: `*Pay Period*\n${slackSafe(entry.period_label || 'Not set')}` },
       { type: 'mrkdwn', text: `*Hours*\n${entry.regular_hours} regular · ${entry.overtime_hours} OT · ${entry.double_time_hours} DT` },
       { type: 'mrkdwn', text: `*Updated By*\n${slackSafe(actorName)}` },
       { type: 'mrkdwn', text: `*Comment*\n${slackSafe(comment || '—')}` },
     ] },
+    { type: 'section', text: { type: 'mrkdwn', text: PINK_LINE } },
     ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : []),
   ]
   return sendFinanceSlack({ text, blocks })
@@ -68,8 +71,7 @@ export async function sendStatusNotification(entry, status, actorName, comment =
 export async function sendDailyReminder() {
   const url = clean(process.env.APP_BASE_URL).replace(/\/$/, '')
   const blocks = [
-    { type: 'header', text: { type: 'plain_text', text: 'Daily OT & Temp Timecard Reminder', emoji: true } },
-    { type: 'section', text: { type: 'mrkdwn', text: 'Please review and submit today\'s OT and temporary-worker timecard information before the end of the day.' } },
+    { type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*DAILY OT & TEMP TIMECARD REMINDER*\n${PINK_LINE}\n\nPlease review and submit today\'s OT and temporary-worker timecard information before the end of the day.` } },
     ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Open Timecard App', emoji: true }, url, action_id: 'finance_open_app' }] }] : []),
   ]
   return sendFinanceSlack({ text: 'Daily OT & Temp Timecard Reminder', blocks })
