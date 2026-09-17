@@ -4,7 +4,7 @@ function slackSafe(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-const PINK_LINE = ':pinkline:'
+const PINK_LINE = ':pinkline::pinkline::pinkline::pinkline::pinkline::pinkline::pinkline::pinkline:'
 
 function appUrl(entryId) {
   const base = clean(process.env.APP_BASE_URL).replace(/\/$/, '')
