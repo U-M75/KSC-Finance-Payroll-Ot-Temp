@@ -1,0 +1,2 @@
+submission_number,entry_type,pay_period_start,pay_period_end,worker_or_employee,agency,department,supervisor,regular_hours,overtime_hours,double_time_hours,status,submitted_by,approved_by,approved_at,notes
+TC-2026-000100,Temp Timecard,2026-09-07,2026-09-11,Shelly Snyder,Employnet,Picking,Sandra Pena,16,0,0,Pending Approval,Finance Demo,,,Historical Slack import example
