@@ -15,7 +15,6 @@ const NAV = [
   ['payroll', '$', 'Payroll'],
   ['reports', '▥', 'Reports'],
   ['audit', '◌', 'Audit Log'],
-  ['settings', '⚙', 'Settings'],
 ]
 const STATUS_OPTIONS = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
 const EMPTY_FORM = {
@@ -86,7 +85,6 @@ export default function App() {
   else if (page === 'payroll') content = <PayrollPage user={user} navigate={navigate} />
   else if (page === 'reports') content = <ReportsPage user={user} />
   else if (page === 'audit') content = <AuditPage />
-  else if (page === 'settings') content = <SettingsPage user={user} />
   else if (page === 'new-temp') content = <EntryForm user={user} initialType="Temp Timecard" navigate={navigate} setToast={setToast} />
   else if (page === 'new-ot') content = <EntryForm user={user} initialType="Employee OT" navigate={navigate} setToast={setToast} />
   else if (page.startsWith('entry:')) content = <EntryDetail id={page.split(':')[1]} user={user} navigate={navigate} setToast={setToast} />
@@ -105,14 +103,14 @@ export default function App() {
 
 function Login({ onLogin }) {
   const [name, setName] = useState('')
-  const [pin, setPin] = useState('')
+  const [password, setPassword] = useState('')
   const [role, setRole] = useState('Supervisor')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   async function submit(event) {
     event.preventDefault(); setLoading(true); setError('')
     try {
-      const data = await apiJson('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, pin, role }) })
+      const data = await apiJson('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, password, role }) })
       onLogin(data.user)
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -123,7 +121,7 @@ function Login({ onLogin }) {
     <p>OT, temporary-worker timecards, approvals and payroll tracking in one place.</p>
     <form onSubmit={submit}>
       <label>Your name<input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sandra Pena" required /></label>
-      <label>Access PIN<input value={pin} onChange={e => setPin(e.target.value)} type="password" inputMode="numeric" placeholder="Enter PIN" required /></label>
+      <label>Role password<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Enter your role password" required /></label>
       <label>Role<select value={role} onChange={e => setRole(e.target.value)}>{ROLES.map(item => <option key={item}>{item}</option>)}</select></label>
       {error && <div className="form-error">{error}</div>}
       <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open finance hub →'}</button>
@@ -312,8 +310,60 @@ function PayrollPage({ user, navigate }) {
   useEffect(() => { if (!periodId) return; apiJson(`/api/time-entries?pay_period_id=${encodeURIComponent(periodId)}&user_role=${user.role}&user_name=${encodeURIComponent(user.name)}`).then(data => setEntries(data.entries || [])).catch(err => setError(err.message)) }, [periodId, user])
   const metrics = { employees: new Set(entries.filter(row => row.entry_type === 'Employee OT').map(row => row.subject_name)).size, workers: new Set(entries.filter(row => row.entry_type === 'Temp Timecard').map(row => row.subject_name)).size, regular: entries.reduce((sum, row) => sum + Number(row.regular_hours || 0), 0), ot: entries.reduce((sum, row) => sum + Number(row.overtime_hours || 0), 0), dt: entries.reduce((sum, row) => sum + Number(row.double_time_hours || 0), 0) }
   function exportCsv() { const headers = ['Submission ID','Pay Period','Worker / Employee','Agency','Department','Supervisor','Regular Hours','OT Hours','DT Hours','Total Hours','Status','Submitted By','Approved By','Approved Date']; const lines = entries.map(row => [row.submission_number,row.period_label,row.subject_name,row.agency_label,row.department_label,row.supervisor_name,row.regular_hours,row.overtime_hours,row.double_time_hours,totalHours(row),row.status,row.submitted_by_name,row.approved_by_name || '',row.approved_at || ''].map(csvCell).join(',')); const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `ksc-payroll-${periodId}.csv`; a.click(); URL.revokeObjectURL(url) }
-  return <><Header eyebrow="Payroll review" title="Payroll processing" description="Verify approved records, export payroll data and track processed status." actions={<><select className="period-select" value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">Select pay period</option>{periods.periods.map(row => <option key={row.id} value={row.id}>{periodLabel(row)}</option>)}</select><button className="secondary-button" onClick={exportCsv}>Export CSV</button></>} />{error && <div className="form-error">{error}</div>}<div className="stat-grid"><StatCard label="Employees" value={metrics.employees} /><StatCard label="Temp Workers" value={metrics.workers} tone="blue" /><StatCard label="Regular Hours" value={moneyHours(metrics.regular)} tone="green" /><StatCard label="OT Hours" value={moneyHours(metrics.ot)} tone="gold" /><StatCard label="DT Hours" value={moneyHours(metrics.dt)} tone="pink" /><StatCard label="Total Hours" value={moneyHours(metrics.regular + metrics.ot + metrics.dt)} /></div><Panel title="Payroll records" subtitle="Only Payroll/Admin can mark approved records as processed.">{entries.length ? <EntryTable entries={entries} navigate={navigate} user={user} /> : <Empty title="No payroll records for this period" />}</Panel></>
+  return <><Header eyebrow="Payroll review" title="Payroll processing" description="Verify approved records, export payroll data and track processed status." actions={<><select className="period-select" value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">Select pay period</option>{periods.periods.map(row => <option key={row.id} value={row.id}>{periodLabel(row)}</option>)}</select>{['Admin','Payroll'].includes(user.role) && <ImportHistoryButton user={user} />}<button className="secondary-button" onClick={exportCsv}>Export CSV</button></>} />{error && <div className="form-error">{error}</div>}<div className="stat-grid"><StatCard label="Employees" value={metrics.employees} /><StatCard label="Temp Workers" value={metrics.workers} tone="blue" /><StatCard label="Regular Hours" value={moneyHours(metrics.regular)} tone="green" /><StatCard label="OT Hours" value={moneyHours(metrics.ot)} tone="gold" /><StatCard label="DT Hours" value={moneyHours(metrics.dt)} tone="pink" /><StatCard label="Total Hours" value={moneyHours(metrics.regular + metrics.ot + metrics.dt)} /></div><Panel title="Payroll records" subtitle="Only Payroll/Admin can mark approved records as processed.">{entries.length ? <EntryTable entries={entries} navigate={navigate} user={user} /> : <Empty title="No payroll records for this period" />}</Panel></>
 }
+function parseCsv(text) {
+  const rows = []
+  let row = [], cell = '', quoted = false
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    const next = text[index + 1]
+    if (char === '"' && quoted && next === '"') { cell += '"'; index += 1; continue }
+    if (char === '"') { quoted = !quoted; continue }
+    if (char === ',' && !quoted) { row.push(cell); cell = ''; continue }
+    if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && next === '\n') index += 1
+      row.push(cell); cell = ''
+      if (row.some(value => value.trim() !== '')) rows.push(row)
+      row = []
+      continue
+    }
+    cell += char
+  }
+  row.push(cell)
+  if (row.some(value => value.trim() !== '')) rows.push(row)
+  if (rows.length < 2) return []
+  const headers = rows[0].map(value => value.trim())
+  return rows.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() || ''])))
+}
+
+function ImportHistoryButton({ user }) {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  async function handleFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setBusy(true); setMessage('')
+    try {
+      const text = await file.text()
+      let records
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(text)
+        records = Array.isArray(parsed) ? parsed : (parsed.records || parsed.data || [])
+      } else {
+        records = parseCsv(text)
+      }
+      if (!records.length) throw new Error('No records found. Use the provided finance-timecard-import-template.csv format.')
+      const data = await apiJson('/api/import-timecards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { records })) })
+      setMessage(`${data.imported} imported · ${data.skipped} skipped${data.errors?.length ? ` · ${data.errors.length} errors` : ''}`)
+    } catch (error) {
+      setMessage(error.message)
+    } finally { setBusy(false) }
+  }
+  return <><label className="import-button secondary-button">{busy ? 'Importing…' : 'Import Slack history'}<input type="file" accept=".csv,.json,application/json,text/csv" onChange={handleFile} hidden /></label>{message && <span className="import-result">{message}</span>}</>
+}
+
 function csvCell(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text }
 
 function ReportsPage({ user }) {
@@ -326,4 +376,3 @@ function ReportsPage({ user }) {
 function Bars({ rows, count = false }) { const max = Math.max(...rows.map(row => row[1]), 1); return rows.length ? <div className="bars">{rows.map(([label, value]) => <div className="bar-row" key={label}><div className="bar-label"><span>{label}</span><strong>{count ? value : moneyHours(value)}{count ? ' record(s)' : ' hours'}</strong></div><div className="bar-track"><i style={{ width: `${Math.max(5, value / max * 100)}%` }} /></div></div>)}</div> : <p className="muted">No data for this period.</p> }
 
 function AuditPage() { const [logs, setLogs] = useState(null); useEffect(() => { apiJson('/api/audit').then(data => setLogs(data.logs || [])).catch(() => setLogs([])) }, []); return <><Header eyebrow="Accountability" title="Audit log" description="Every create, edit, approval, correction, PDF and payroll action is recorded." />{logs === null ? <Loading /> : <Panel title={`${logs.length} audit events`}><div className="audit-list">{logs.map(row => <div className="audit-row" key={row.id}><div className="audit-dot" /><div><strong>{row.action}</strong><span>{row.user_name} · {row.user_role || 'System'} · {dateTime(row.created_at)}</span>{row.comment && <p>{row.comment}</p>}</div><small>{row.time_entry_id ? 'Time entry linked' : 'System event'}</small></div>)}</div>{!logs.length && <Empty />}</Panel>}</> }
-function SettingsPage({ user }) { return <><Header eyebrow="Configuration" title="Settings" description="Integration status and workflow defaults for the finance hub." /><div className="settings-grid"><Panel title="Approval workflow"><div className="setting-row"><span>Current approval path</span><strong>Supervisor → Payroll</strong></div><div className="setting-row"><span>Shared login</span><strong>PIN + role selection</strong></div><div className="setting-row"><span>QuickBooks</span><strong>Placeholder / export-ready</strong></div><div className="setting-row"><span>Slack channel</span><strong>finance-payroll-ot-temp</strong></div></Panel><Panel title="QuickBooks connection"><div className="connection-card"><span className="connection-dot" />Not connected</div><p className="muted">The export layer will never mark a record exported until QuickBooks confirms success. Add credentials later through Vercel environment variables.</p><button className="secondary-button" disabled={user.role !== 'Admin'}>Configure connection</button></Panel><Panel title="Data quality rules"><Checklist items={['End date cannot precede start date', 'Negative hours are rejected', 'OT and DT blanks become 0', 'Rejected records require a reason', 'Processed records are read-only for normal users']} /></Panel></div></> }

@@ -28,7 +28,10 @@ Set these in Vercel. Never paste secrets into chat or commit them.
 ```text
 SUPABASE_URL=
 SUPABASE_SERVICE_KEY=
-FINANCE_APP_PIN=
+FINANCE_ADMIN_PASSWORD=
+FINANCE_SUPERVISOR_PASSWORD=
+FINANCE_PAYROLL_PASSWORD=
+FINANCE_EMPLOYEE_PASSWORD=
 APP_BASE_URL=https://your-finance-app.vercel.app
 
 SLACK_BOT_TOKEN=
@@ -38,7 +41,7 @@ CRON_SECRET=
 QUICKBOOKS_ENABLED=false
 ```
 
-The selected first version uses a shared PIN plus role selection. This is intentionally simple for the internal prototype; move to individual accounts/SSO before exposing the app outside the company.
+The app now uses separate role passwords: Admin, Supervisor, Payroll and Employee. The selected role must match its own Vercel password variable. This is role-level access; move to individual accounts/SSO before exposing the app outside the company.
 
 ## Supabase setup
 
@@ -88,7 +91,9 @@ Use an external scheduler during testing, then configure business days and remin
 
 ## Migration-ready CSV
 
-`finance-timecard-import-template.csv` shows the suggested historical Slack import shape. Historical records should be imported as immutable records with their original dates/approvals and any existing PDF linked later.
+`finance-timecard-import-template.csv` shows the suggested historical Slack import shape. Admin or Payroll can open the Payroll page and use **Import Slack history** to upload a CSV or JSON file. The importer creates missing pay periods, departments, agencies, workers or employees, preserves original submission numbers when provided, stores approval/status/notes, and writes an audit event without sending new Slack notifications. Historical PDFs can be included through `pdf_url` and `pdf_file_name` columns or JSON fields.
+
+The old Slack workflow data is not automatically available inside the new app. Export/copy the historical Slack workflow records into this template first, then import them through the Payroll page. Do not run the demo seed file for a client handoff.
 
 ## Deployment
 
@@ -97,4 +102,4 @@ Use an external scheduler during testing, then configure business days and remin
 3. Import the repository into Vercel.
 4. Add the environment variables above.
 5. Deploy and test login, pay-period creation, a timecard, approval, PDF and CSV export.
-6. Configure the Slack interactivity URL and reminder scheduler only after the app URL is live.
+6. Configure the Slack channel notification variables and reminder scheduler only after the app URL is live. Interactive Slack approval buttons are intentionally postponed.
