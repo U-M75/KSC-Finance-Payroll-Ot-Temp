@@ -63,7 +63,7 @@ Required bot scopes:
 - `channels:read` / `groups:read`
 - `files:read` if historical PDFs/files should be linked
 
-The Admin/Payroll page has a **Pull from Slack** button. It reads history from the same `SLACK_FINANCE_PAYROLL_CHANNEL_ID`, parses the legacy timecard fields, creates missing directory/pay-period records, skips previously imported Slack timestamps, and writes an audit log without sending new notifications. The bot must be invited to the channel, and the Slack app must be reinstalled after adding scopes. Slack approve/reject buttons and signing-secret verification remain postponed.
+When an Admin or Payroll user signs in, the app automatically reads history from the same `SLACK_FINANCE_PAYROLL_CHANNEL_ID`, parses the legacy timecard fields, creates missing directory/pay-period records, skips previously imported Slack timestamps, and writes an audit log without sending new notifications. The bot must be invited to the channel, and the Slack app must be reinstalled after adding scopes. Slack approve/reject buttons and signing-secret verification remain postponed.
 
 ## Daily reminder scheduler
 

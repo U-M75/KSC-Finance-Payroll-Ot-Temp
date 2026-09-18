@@ -37,7 +37,7 @@ async function findOrCreateAgency(supabase, name) {
 }
 
 async function findOrCreateWorker(supabase, record, agency, department) {
-  const name = clean(first(record, ['temp_worker_name','worker_name','worker','temp_worker','name'])) || 'Historical / Unknown Worker'
+  const name = clean(first(record, ['temp_worker_name','worker_name','worker_or_employee','worker','temp_worker','name'])) || 'Historical / Unknown Worker'
   let query = supabase.from('finance_temp_workers').select('*').eq('name', name)
   if (record.worker_id || record.worker_id_snapshot) query = query.eq('worker_id', first(record, ['worker_id','worker_id_snapshot']))
   const result = await query.limit(1).maybeSingle()
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
           agency = await findOrCreateAgency(supabase, first(record, ['agency','temp_agency','temp_agency_name']))
           worker = await findOrCreateWorker(supabase, record, agency, department)
         } else {
-          const employeeName = clean(first(record, ['employee_name','employee','worker_name','name'])) || 'Historical / Unknown Employee'
+          const employeeName = clean(first(record, ['employee_name','employee','worker_or_employee','worker_name','name'])) || 'Historical / Unknown Employee'
           let employeeResult = await supabase.from('finance_employees').select('*').eq('name', employeeName).limit(1).maybeSingle()
           if (employeeResult.error) throw employeeResult.error
           if (!employeeResult.data) employeeResult = await supabase.from('finance_employees').insert({ name: employeeName, department_id: department.id, supervisor_name: first(record, ['supervisor','supervisor_name'], 'Unassigned'), status: 'Active' }).select().single()
@@ -121,8 +121,8 @@ export default async function handler(req, res) {
           temp_worker_id: worker?.id || null,
           temp_agency_id: agency?.id || null,
           department_id: department.id,
-          employee_name_snapshot: employee?.name || (entryType === 'Employee OT' ? first(record, ['employee_name','employee','worker_name','name']) : null),
-          temp_worker_name_snapshot: worker?.name || (entryType === 'Temp Timecard' ? first(record, ['temp_worker_name','worker_name','worker','temp_worker','name']) : null),
+          employee_name_snapshot: employee?.name || (entryType === 'Employee OT' ? first(record, ['employee_name','employee','worker_or_employee','worker_name','name']) : null),
+          temp_worker_name_snapshot: worker?.name || (entryType === 'Temp Timecard' ? first(record, ['temp_worker_name','worker_name','worker_or_employee','worker','temp_worker','name']) : null),
           temp_agency_name_snapshot: agency?.name || (entryType === 'Temp Timecard' ? first(record, ['agency','temp_agency','temp_agency_name']) : null),
           department_name_snapshot: department.name,
           supervisor_name: first(record, ['supervisor','supervisor_name'], 'Unassigned'),
