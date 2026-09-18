@@ -340,6 +340,15 @@ function parseCsv(text) {
 function ImportHistoryButton({ user }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  async function handleSlack() {
+    setBusy(true); setMessage('')
+    try {
+      const data = await apiJson('/api/import-slack-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { max_pages: 20 })) })
+      setMessage(`Slack: ${data.imported} imported · ${data.skipped} skipped · ${data.matched} matched${data.errors?.length ? ` · ${data.errors.length} errors` : ''}`)
+    } catch (error) {
+      setMessage(error.message)
+    } finally { setBusy(false) }
+  }
   async function handleFile(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -361,7 +370,7 @@ function ImportHistoryButton({ user }) {
       setMessage(error.message)
     } finally { setBusy(false) }
   }
-  return <><label className="import-button secondary-button">{busy ? 'Importing…' : 'Import Slack history'}<input type="file" accept=".csv,.json,application/json,text/csv" onChange={handleFile} hidden /></label>{message && <span className="import-result">{message}</span>}</>
+  return <><button type="button" className="secondary-button" disabled={busy} onClick={handleSlack}>{busy ? 'Importing…' : 'Pull from Slack'}</button><label className="import-button secondary-button">Import CSV/JSON<input type="file" accept=".csv,.json,application/json,text/csv" onChange={handleFile} hidden /></label>{message && <span className="import-result">{message}</span>}</>
 }
 
 function csvCell(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text }

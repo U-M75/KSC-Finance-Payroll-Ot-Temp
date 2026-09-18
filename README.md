@@ -58,9 +58,12 @@ The app posts to `finance-payroll-ot-temp` through `SLACK_FINANCE_PAYROLL_CHANNE
 Required bot scopes:
 
 - `chat:write`
-- `files:write` is not required for the first version because PDFs download from the app; add it later if PDF uploads to Slack are enabled.
+- `channels:history` for public-channel history
+- `groups:history` for private-channel history
+- `channels:read` / `groups:read`
+- `files:read` if historical PDFs/files should be linked
 
-Slack notifications currently include a safe View Submission link only. Slack approve/reject buttons and signing-secret verification are intentionally postponed until the Slack app is connected later.
+The Admin/Payroll page has a **Pull from Slack** button. It reads history from the same `SLACK_FINANCE_PAYROLL_CHANNEL_ID`, parses the legacy timecard fields, creates missing directory/pay-period records, skips previously imported Slack timestamps, and writes an audit log without sending new notifications. The bot must be invited to the channel, and the Slack app must be reinstalled after adding scopes. Slack approve/reject buttons and signing-secret verification remain postponed.
 
 ## Daily reminder scheduler
 
