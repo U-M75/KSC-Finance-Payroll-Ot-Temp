@@ -5,27 +5,43 @@ const CHANNEL_ENV = 'SLACK_FINANCE_PAYROLL_CHANNEL_ID'
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) }
 function first(record, keys, fallback = '') { for (const key of keys) if (record[key] !== undefined && record[key] !== null && String(record[key]).trim() !== '') return record[key]; return fallback }
 function number(value) { try { return numberHours(String(value ?? '').replace(/[^0-9.\-]/g, '') || 0) } catch { return 0 } }
-function normalizeText(value) { return String(value || '').replace(/<mailto:([^>|]+)\|([^>]+)>/g, '$2').replace(/<([^>|]+)\|([^>]+)>/g, '$2').replace(/[*_`]/g, '').trim() }
+function normalizeText(value) {
+  return String(value || '')
+    .replace(/<mailto:([^>|]+)\|([^>]+)>/g, '$2')
+    .replace(/<([^>|]+)\|([^>]+)>/g, '$2')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+}
+function cleanFieldValue(value) {
+  return normalizeText(value).replace(/^[\s:：.·…—–-]+/, '').trim()
+}
 function messageText(message) {
-  const parts = [message.text]
+  const parts = [message.text, message.fallback, message.message?.text]
   for (const block of message.blocks || []) {
     if (block.text?.text) parts.push(block.text.text)
     for (const field of block.fields || []) if (field.text) parts.push(field.text)
   }
   for (const attachment of message.attachments || []) {
-    parts.push(attachment.pretext, attachment.title, attachment.text)
+    parts.push(attachment.pretext, attachment.title, attachment.text, attachment.fallback)
     for (const field of attachment.fields || []) parts.push(`${field.title}: ${field.value}`)
   }
   return parts.filter(Boolean).map(normalizeText).join('\n')
 }
 function linesFor(text) { return text.split(/\r?\n/).map(line => line.replace(/^\s*[•>\-]\s*/, '').trim()).filter(Boolean) }
 function fieldValue(lines, labels) {
-  const pattern = new RegExp(`^(?:${labels.join('|')})\\s*[:：]?\\s*(.*)$`, 'i')
+  const ordered = [...labels].sort((left, right) => right.length - left.length)
+  const pattern = new RegExp(`^(?:${ordered.join('|')})\\b(.*)$`, 'i')
   for (let index = 0; index < lines.length; index += 1) {
     const match = lines[index].match(pattern)
     if (!match) continue
-    if (match[1].trim()) return match[1].trim()
-    return lines[index + 1] || ''
+    const rawRest = match[1] || ''
+    const inline = rawRest.trim()
+    const hasLeaderOrColon = /^\s*(?:[:：.·…—–-])/.test(rawRest)
+    if (inline && hasLeaderOrColon && !/^[.·…—–-]+$/.test(inline)) return cleanFieldValue(inline)
+    if (!inline || hasLeaderOrColon) return cleanFieldValue(lines[index + 1] || '')
   }
   return ''
 }
@@ -179,6 +195,10 @@ async function importRecord(supabase, record, actorInfo) {
   return { imported: true, submission_number: submissionNumber }
 }
 
+export function parseSlackMessageForImport(message) {
+  return parseMessage(message)
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   try {
@@ -192,7 +212,7 @@ export default async function handler(req, res) {
     const messages = await slackHistory(token, channel, Math.min(50, Math.max(1, Number(body.max_pages || 20))))
     let imported = 0; let skipped = 0; const errors = []; const matched = []
     for (const message of messages) {
-      if (message.subtype && message.subtype !== 'bot_message' && message.subtype !== 'file_share') continue
+      if (message.subtype === 'message_deleted' || message.hidden) continue
       const parsed = parseMessage(message)
       if (!parsed.match) continue
       matched.push({ ts: message.ts, worker: parsed.worker_name, type: parsed.entry_type })
