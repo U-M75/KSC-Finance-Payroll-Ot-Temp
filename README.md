@@ -55,15 +55,11 @@ The app now uses separate role passwords: Admin, Supervisor, Payroll and Employe
 
 The app posts to `finance-payroll-ot-temp` through `SLACK_FINANCE_PAYROLL_CHANNEL_ID`.
 
-Required bot scopes:
+Required bot scope:
 
 - `chat:write`
-- `channels:history` for public-channel history
-- `groups:history` for private-channel history
-- `channels:read` / `groups:read`
-- `files:read` if historical PDFs/files should be linked
 
-When an Admin or Payroll user signs in, the app automatically reads history from the same `SLACK_FINANCE_PAYROLL_CHANNEL_ID`, parses the legacy timecard fields, creates missing directory/pay-period records, skips previously imported Slack timestamps, and writes an audit log without sending new notifications. The bot must be invited to the channel, and the Slack app must be reinstalled after adding scopes. Slack approve/reject buttons and signing-secret verification remain postponed.
+The app uses Slack only for new submission/status notifications and daily reminders. Historical Slack importing is not included in this version.
 
 ## Daily reminder scheduler
 
@@ -91,12 +87,6 @@ Use an external scheduler during testing, then configure business days and remin
 - Slack messages currently use a `:pinkline:` branded separator and a View Submission link; interactive Slack approvals can be connected later.
 - QuickBooks is modular and safely remains `Ready for Export` until a live adapter is configured; the app never fakes a successful export.
 - Audit entries are created for submissions, edits, approvals, corrections and QuickBooks preparation.
-
-## Migration-ready CSV
-
-`finance-timecard-import-template.csv` shows the suggested historical Slack import shape. Admin or Payroll can open the Payroll page and use **Import Slack history** to upload a CSV or JSON file. The importer creates missing pay periods, departments, agencies, workers or employees, preserves original submission numbers when provided, stores approval/status/notes, and writes an audit event without sending new Slack notifications. Historical PDFs can be included through `pdf_url` and `pdf_file_name` columns or JSON fields.
-
-The old Slack workflow data is not automatically available inside the new app. Export/copy the historical Slack workflow records into this template first, then import them through the Payroll page. Do not run the demo seed file for a client handoff.
 
 ## Deployment
 

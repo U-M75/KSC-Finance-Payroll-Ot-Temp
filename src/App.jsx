@@ -59,14 +59,6 @@ export default function App() {
     if (!user) return
     apiJson(`/api/notifications?user_name=${encodeURIComponent(user.name)}`).then(data => setNotifications(data.notifications || [])).catch(() => {})
   }, [user, page])
-  useEffect(() => {
-    if (!user || !['Admin', 'Payroll'].includes(user.role)) return
-    const syncKey = `ksc_slack_history_synced_${user.name}`
-    if (sessionStorage.getItem(syncKey)) return
-    apiJson('/api/import-slack-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { max_pages: 50, automatic: true })) })
-      .then(data => { sessionStorage.setItem(syncKey, '1'); if (data.imported || data.matched) setToast(`Slack history sync: ${data.imported} imported, ${data.skipped} already present.`) })
-      .catch(error => setToast(`Slack history sync failed: ${error.message}`))
-  }, [user])
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 4200); return () => clearTimeout(timer) }, [toast])
 
   function login(nextUser) { localStorage.setItem('ksc_finance_user', JSON.stringify(nextUser)); setUser(nextUser) }
@@ -320,67 +312,6 @@ function PayrollPage({ user, navigate }) {
   function exportCsv() { const headers = ['Submission ID','Pay Period','Worker / Employee','Agency','Department','Supervisor','Regular Hours','OT Hours','DT Hours','Total Hours','Status','Submitted By','Approved By','Approved Date']; const lines = entries.map(row => [row.submission_number,row.period_label,row.subject_name,row.agency_label,row.department_label,row.supervisor_name,row.regular_hours,row.overtime_hours,row.double_time_hours,totalHours(row),row.status,row.submitted_by_name,row.approved_by_name || '',row.approved_at || ''].map(csvCell).join(',')); const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `ksc-payroll-${periodId}.csv`; a.click(); URL.revokeObjectURL(url) }
   return <><Header eyebrow="Payroll review" title="Payroll processing" description="Verify approved records, export payroll data and track processed status." actions={<><select className="period-select" value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">Select pay period</option>{periods.periods.map(row => <option key={row.id} value={row.id}>{periodLabel(row)}</option>)}</select><button className="secondary-button" onClick={exportCsv}>Export CSV</button></>} />{error && <div className="form-error">{error}</div>}<div className="stat-grid"><StatCard label="Employees" value={metrics.employees} /><StatCard label="Temp Workers" value={metrics.workers} tone="blue" /><StatCard label="Regular Hours" value={moneyHours(metrics.regular)} tone="green" /><StatCard label="OT Hours" value={moneyHours(metrics.ot)} tone="gold" /><StatCard label="DT Hours" value={moneyHours(metrics.dt)} tone="pink" /><StatCard label="Total Hours" value={moneyHours(metrics.regular + metrics.ot + metrics.dt)} /></div><Panel title="Payroll records" subtitle="Only Payroll/Admin can mark approved records as processed.">{entries.length ? <EntryTable entries={entries} navigate={navigate} user={user} /> : <Empty title="No payroll records for this period" />}</Panel></>
 }
-function parseCsv(text) {
-  const rows = []
-  let row = [], cell = '', quoted = false
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index]
-    const next = text[index + 1]
-    if (char === '"' && quoted && next === '"') { cell += '"'; index += 1; continue }
-    if (char === '"') { quoted = !quoted; continue }
-    if (char === ',' && !quoted) { row.push(cell); cell = ''; continue }
-    if ((char === '\n' || char === '\r') && !quoted) {
-      if (char === '\r' && next === '\n') index += 1
-      row.push(cell); cell = ''
-      if (row.some(value => value.trim() !== '')) rows.push(row)
-      row = []
-      continue
-    }
-    cell += char
-  }
-  row.push(cell)
-  if (row.some(value => value.trim() !== '')) rows.push(row)
-  if (rows.length < 2) return []
-  const headers = rows[0].map(value => value.trim())
-  return rows.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() || ''])))
-}
-
-function ImportHistoryButton({ user }) {
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-  async function handleSlack() {
-    setBusy(true); setMessage('')
-    try {
-      const data = await apiJson('/api/import-slack-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { max_pages: 20 })) })
-      setMessage(`Slack: ${data.imported} imported · ${data.skipped} skipped · ${data.matched} matched${data.errors?.length ? ` · ${data.errors.length} errors` : ''}`)
-    } catch (error) {
-      setMessage(error.message)
-    } finally { setBusy(false) }
-  }
-  async function handleFile(event) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setBusy(true); setMessage('')
-    try {
-      const text = await file.text()
-      let records
-      if (file.name.toLowerCase().endsWith('.json')) {
-        const parsed = JSON.parse(text)
-        records = Array.isArray(parsed) ? parsed : (parsed.records || parsed.data || [])
-      } else {
-        records = parseCsv(text)
-      }
-      if (!records.length) throw new Error('No records found. Use the provided finance-timecard-import-template.csv format.')
-      const data = await apiJson('/api/import-timecards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { records })) })
-      setMessage(`${data.imported} imported · ${data.skipped} skipped${data.errors?.length ? ` · ${data.errors.length} errors` : ''}`)
-    } catch (error) {
-      setMessage(error.message)
-    } finally { setBusy(false) }
-  }
-  return <><button type="button" className="secondary-button" disabled={busy} onClick={handleSlack}>{busy ? 'Importing…' : 'Pull from Slack'}</button><label className="import-button secondary-button">Import CSV/JSON<input type="file" accept=".csv,.json,application/json,text/csv" onChange={handleFile} hidden /></label>{message && <span className="import-result">{message}</span>}</>
-}
-
 function csvCell(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text }
 
 function ReportsPage({ user }) {
