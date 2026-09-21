@@ -5,6 +5,7 @@ const TABLES = {
   agencies: 'finance_temp_agencies',
   workers: 'finance_temp_workers',
   employees: 'finance_employees',
+  supervisors: 'finance_supervisors',
 }
 
 function tableFor(entity) {
@@ -17,18 +18,20 @@ export default async function handler(req, res) {
   try {
     const supabase = admin()
     if (req.method === 'GET') {
-      const [departments, agencies, workers, employees] = await Promise.all([
+      const [departments, agencies, workers, employees, supervisorRows] = await Promise.all([
         supabase.from('finance_departments').select('*').order('name'),
         supabase.from('finance_temp_agencies').select('*').order('name'),
         supabase.from('finance_temp_workers').select('*, finance_temp_agencies(name), finance_departments(name,code)').order('name'),
         supabase.from('finance_employees').select('*, finance_departments(name,code)').order('name'),
+        supabase.from('finance_supervisors').select('*').order('name'),
       ])
-      for (const result of [departments, agencies, workers, employees]) if (result.error) throw result.error
+      for (const result of [departments, agencies, workers, employees, supervisorRows]) if (result.error) throw result.error
       const supervisors = [...new Set([
+        ...(supervisorRows.data || []).filter(row => row.status === 'Active').map(row => row.name),
         ...(workers.data || []).map(row => row.supervisor_name),
         ...(employees.data || []).map(row => row.supervisor_name),
       ].filter(Boolean))].sort()
-      return res.status(200).json({ departments: departments.data || [], agencies: agencies.data || [], workers: workers.data || [], employees: employees.data || [], supervisors })
+      return res.status(200).json({ departments: departments.data || [], agencies: agencies.data || [], workers: workers.data || [], employees: employees.data || [], supervisors, supervisor_records: supervisorRows.data || [] })
     }
 
     const body = req.body || {}

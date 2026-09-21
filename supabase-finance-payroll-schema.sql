@@ -57,6 +57,14 @@ create table if not exists public.finance_employees (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.finance_supervisors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  department_id uuid references public.finance_departments(id) on delete set null,
+  status text not null default 'Active' check (status in ('Active','Inactive')),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.finance_temp_workers (
   id uuid primary key default gen_random_uuid(),
   name text not null,

@@ -12,6 +12,7 @@ const NAV = [
   ['workers', '♧', 'Temp Workers'],
   ['agencies', '▦', 'Temp Agencies'],
   ['departments', '◈', 'Departments'],
+  ['supervisors', '♙', 'Supervisors'],
   ['payroll', '$', 'Payroll'],
   ['reports', '▥', 'Reports'],
   ['audit', '◌', 'Audit Log'],
@@ -82,6 +83,7 @@ export default function App() {
   else if (page === 'workers') content = <DirectoryPage user={user} entity="workers" title="Temp Workers" />
   else if (page === 'agencies') content = <DirectoryPage user={user} entity="agencies" title="Temp Agencies" />
   else if (page === 'departments') content = <DirectoryPage user={user} entity="departments" title="Departments" />
+  else if (page === 'supervisors') content = <DirectoryPage user={user} entity="supervisors" title="Supervisors" />
   else if (page === 'payroll') content = <PayrollPage user={user} navigate={navigate} />
   else if (page === 'reports') content = <ReportsPage user={user} />
   else if (page === 'audit') content = <AuditPage />
@@ -154,7 +156,7 @@ function Loading() { return <div className="loading-state">Loading finance recor
 function Empty({ title = 'No records yet', text = 'Records created in the app will appear here.' }) { return <div className="empty-state"><div className="empty-icon">♡</div><h2>{title}</h2><p>{text}</p></div> }
 
 function useLookups() {
-  const [data, setData] = useState({ departments: [], agencies: [], workers: [], employees: [], supervisors: [] })
+  const [data, setData] = useState({ departments: [], agencies: [], workers: [], employees: [], supervisors: [], supervisor_records: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   async function reload() { setLoading(true); try { setData(await apiJson('/api/lookups')); setError('') } catch (err) { setError(err.message) } finally { setLoading(false) } }
@@ -296,7 +298,7 @@ function PayPeriodsPage({ user }) {
 }
 function DirectoryPage({ user, entity, title }) {
   const lookups = useLookups(); const [showForm, setShowForm] = useState(false); const [name, setName] = useState(''); const [message, setMessage] = useState('')
-  const rows = entity === 'departments' ? lookups.departments : entity === 'agencies' ? lookups.agencies : entity === 'workers' ? lookups.workers : lookups.employees
+  const rows = entity === 'departments' ? lookups.departments : entity === 'agencies' ? lookups.agencies : entity === 'workers' ? lookups.workers : entity === 'supervisors' ? (lookups.supervisor_records || []) : lookups.employees
   async function addRecord(event) { event.preventDefault(); try { const record = entity === 'departments' ? { name, status: 'Active' } : entity === 'agencies' ? { name, status: 'Active' } : entity === 'workers' ? { name, status: 'Active' } : { name, status: 'Active' }; await apiJson('/api/lookups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { entity, record })) }); setName(''); setShowForm(false); setMessage('Record added.'); lookups.reload() } catch (err) { setMessage(err.message) } }
   return <><Header eyebrow="Directory management" title={title} description="Keep the worker, agency, department and employee directories clean for accurate payroll records." actions={user.role === 'Admin' && <button className="primary-button" onClick={() => setShowForm(value => !value)}>+ Add {title.slice(0, -1)}</button>} />
     {message && <div className="inline-message">{message}</div>}{showForm && <form className="panel compact-form" onSubmit={addRecord}><Input label={`${title.slice(0, -1)} name`} value={name} onChange={setName} required /><button className="primary-button">Save record</button></form>}
