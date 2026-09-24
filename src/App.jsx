@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { generateTimecardPdf } from '../pdf/timecard.js'
 
-const ROLES = ['Admin', 'Supervisor', 'Payroll', 'HR', 'Employee']
+const ROLES = ['Admin', 'Supervisor', 'Payroll', 'HR']
 const NAV = [
   ['dashboard', '⌂', 'Dashboard'],
   ['entries', '▤', 'OT Submissions'],
@@ -106,7 +106,7 @@ export default function App() {
 function Login({ onLogin }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('Employee')
+  const [role, setRole] = useState('Supervisor')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   async function submit(event) {

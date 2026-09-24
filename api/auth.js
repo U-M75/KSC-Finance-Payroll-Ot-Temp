@@ -5,11 +5,9 @@ const ACCOUNT_DEFINITIONS = [
   ['CARLA', 'Carla'],
   ['CHARLES', 'Charles'],
   ['CHRIS', 'Chris'],
-  ['SARAH', 'Sarah'],
   ['JUNAID', 'Junaid'],
   ['ROXY', 'Roxy'],
   ['SANDRA', 'Sandra'],
-  ['TOMMI', 'Tommi'],
   ['PAYROLL', 'Payroll'],
   ['HUMAN_RESOURCES', 'Human Resources'],
 ]

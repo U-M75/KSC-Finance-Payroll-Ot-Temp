@@ -22,7 +22,7 @@ function decorate(row) {
 }
 
 async function lookupNames(supabase, body) {
-  const result = { departmentName: body.department_name_snapshot || null, agencyName: body.temp_agency_name_snapshot || null, workerName: body.temp_worker_name_snapshot || null, employeeName: body.employee_name_snapshot || null, workerId: body.worker_id_snapshot || null }
+  const result = { departmentName: body.department_name_snapshot || null, agencyName: body.temp_agency_name_snapshot || null, workerName: body.temp_worker_name_snapshot || null, employeeName: body.employee_name_snapshot || null, workerId: body.worker_id_snapshot || null, workerSupervisor: null, employeeSupervisor: null }
   if (body.department_id) {
     const { data, error } = await supabase.from('finance_departments').select('name').eq('id', body.department_id).maybeSingle()
     if (error) throw error
@@ -39,6 +39,7 @@ async function lookupNames(supabase, body) {
     if (data) {
       result.workerName = data.name
       result.workerId = result.workerId || data.worker_id
+      result.workerSupervisor = data.supervisor_name || null
       if (!body.temp_agency_id && data.agency_id) {
         const agency = await supabase.from('finance_temp_agencies').select('name').eq('id', data.agency_id).maybeSingle()
         if (agency.error) throw agency.error
@@ -47,9 +48,10 @@ async function lookupNames(supabase, body) {
     }
   }
   if (body.employee_id) {
-    const { data, error } = await supabase.from('finance_employees').select('name').eq('id', body.employee_id).maybeSingle()
+    const { data, error } = await supabase.from('finance_employees').select('name,supervisor_name').eq('id', body.employee_id).maybeSingle()
     if (error) throw error
     result.employeeName = data?.name || result.employeeName
+    result.employeeSupervisor = data?.supervisor_name || null
   }
   return result
 }
@@ -106,6 +108,11 @@ export default async function handler(req, res) {
       const names = await lookupNames(supabase, body)
       if (entryType === 'Temp Timecard' && (!names.workerName || !names.agencyName)) return res.status(400).json({ error: 'Temp agency and temp worker are required.' })
       if (entryType === 'Employee OT' && !names.employeeName) return res.status(400).json({ error: 'Employee name is required.' })
+      if (currentActor.role === 'Supervisor') {
+        if (clean(body.supervisor_name) !== currentActor.name) return res.status(403).json({ error: 'Supervisors can only submit requests under their own name.' })
+        const assignedSupervisor = entryType === 'Temp Timecard' ? names.workerSupervisor : names.employeeSupervisor
+        if (assignedSupervisor && assignedSupervisor !== currentActor.name) return res.status(403).json({ error: 'This worker is assigned to a different supervisor.' })
+      }
 
       const { data: period, error: periodError } = await supabase.from('finance_pay_periods').select('*').eq('id', body.pay_period_id).single()
       if (periodError) throw periodError
@@ -176,6 +183,7 @@ export default async function handler(req, res) {
       if (requestedStatus && requestedStatus !== old.status) {
         if (requestedStatus === 'Rejected' && !clean(body.comment)) return res.status(400).json({ error: 'A rejection reason is required.' })
         if (requestedStatus === 'Approved' && !['Supervisor', 'Payroll', 'Admin'].includes(currentActor.role)) return res.status(403).json({ error: 'Only the supervisor or Payroll can approve.' })
+        if (requestedStatus === 'Approved' && currentActor.role === 'Supervisor' && old.supervisor_name !== currentActor.name) return res.status(403).json({ error: 'Supervisors can only approve their own workers.' })
         if (requestedStatus === 'Processed' && !canManage(currentActor.role)) return res.status(403).json({ error: 'Only Admin or Payroll can process a submission.' })
         if (requestedStatus === 'Exported to QuickBooks' && !canManage(currentActor.role)) return res.status(403).json({ error: 'Only Admin or Payroll can mark QuickBooks exports.' })
         if (['Rejected', 'Needs Correction'].includes(requestedStatus) && !['Supervisor', 'Payroll', 'Admin'].includes(currentActor.role)) return res.status(403).json({ error: 'Only an approver can return this submission.' })

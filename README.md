@@ -28,10 +28,33 @@ Set these in Vercel. Never paste secrets into chat or commit them.
 ```text
 SUPABASE_URL=
 SUPABASE_SERVICE_KEY=
-FINANCE_ADMIN_PASSWORD=
-FINANCE_SUPERVISOR_PASSWORD=
-FINANCE_PAYROLL_PASSWORD=
-FINANCE_EMPLOYEE_PASSWORD=
+BLAKELI_USERNAME=
+BLAKELI_PASSWORD=
+BLAKELI_ROLE=Admin
+CARLA_USERNAME=
+CARLA_PASSWORD=
+CARLA_ROLE=Supervisor
+CHARLES_USERNAME=
+CHARLES_PASSWORD=
+CHARLES_ROLE=Supervisor
+CHRIS_USERNAME=
+CHRIS_PASSWORD=
+CHRIS_ROLE=Supervisor
+JUNAID_USERNAME=
+JUNAID_PASSWORD=
+JUNAID_ROLE=Admin
+ROXY_USERNAME=
+ROXY_PASSWORD=
+ROXY_ROLE=Admin
+SANDRA_USERNAME=
+SANDRA_PASSWORD=
+SANDRA_ROLE=Supervisor
+PAYROLL_USERNAME=payroll
+PAYROLL_PASSWORD=
+PAYROLL_ROLE=Payroll
+HUMAN_RESOURCES_USERNAME=human_resources
+HUMAN_RESOURCES_PASSWORD=
+HUMAN_RESOURCES_ROLE=HR
 APP_BASE_URL=https://your-finance-app.vercel.app
 
 SLACK_BOT_TOKEN=
@@ -41,7 +64,7 @@ CRON_SECRET=
 QUICKBOOKS_ENABLED=false
 ```
 
-The app now uses separate role passwords: Admin, Supervisor, Payroll and Employee. The selected role must match its own Vercel password variable. This is role-level access; move to individual accounts/SSO before exposing the app outside the company.
+The app uses separate username/password accounts. The selected role must match the account role. There are 9 accounts: 3 Admins, 4 Supervisors, 1 HR account and 1 Payroll account. There are no Employee accounts. This is role-level access; move to individual accounts/SSO before exposing the app outside the company.
 
 ## Supabase setup
 
