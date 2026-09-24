@@ -78,9 +78,10 @@ The app uses separate username/password accounts. The selected role must match t
 
 The app posts to `finance-payroll-ot-temp` through `SLACK_FINANCE_PAYROLL_CHANNEL_ID`.
 
-Required bot scope:
+Required bot scopes:
 
 - `chat:write`
+- `users:read` so the app can convert `Tommi` and `HR - Sarah` into real Slack mentions
 
 The app uses Slack only for new submission/status notifications and daily reminders. Historical Slack importing is not included in this version.
 
@@ -102,6 +103,9 @@ Use an external scheduler during testing, then configure business days and remin
 - A total is calculated without changing the submitted values.
 - Submit moves the record to `Pending Approval`.
 - Supervisor can approve, reject or request correction.
+- Existing submission and status Slack notifications remain active.
+- Approval also sends a separate Slack notification mentioning Tommi and HR - Sarah when their Slack profiles are found; plain-name fallbacks are used if `users:read` is not available.
+- Approval notifications are protected against duplicate sends for the same approval.
 - Payroll can process approved records and export CSV.
 - Temp timecards use a Monday–Friday weekly pay period.
 - Employee OT uses a Tuesday–Monday weekly pay period.

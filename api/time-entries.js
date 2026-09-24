@@ -1,5 +1,5 @@
 import { admin, actor, audit, canManage, clean, isAdmin, jsonError, notify, numberHours } from './_lib/db.js'
-import { sendNewEntryNotification, sendStatusNotification } from './_lib/slack.js'
+import { sendApprovedTimeEntryNotification, sendNewEntryNotification, sendStatusNotification } from './_lib/slack.js'
 
 const ENTRY_STATUSES = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
 const OPEN_STATUSES = ['Submitted', 'Pending Approval', 'Needs Correction']
@@ -58,6 +58,29 @@ async function lookupNames(supabase, body) {
 
 function entryQuery(supabase) {
   return supabase.from('finance_time_entries').select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').order('created_at', { ascending: false }).limit(2000)
+}
+
+async function sendApprovalSlackOnce(supabase, entry, approverName) {
+  const claim = await supabase.from('finance_time_entries')
+    .update({ approval_slack_sent_at: new Date().toISOString() })
+    .eq('id', entry.id)
+    .is('approval_slack_sent_at', null)
+    .select('id')
+    .maybeSingle()
+  if (claim.error) throw claim.error
+  if (!claim.data) return { sent: false, duplicate: true }
+  try {
+    const result = await sendApprovedTimeEntryNotification(entry, approverName)
+    if (!result.sent) {
+      await supabase.from('finance_time_entries').update({ approval_slack_sent_at: null }).eq('id', entry.id)
+    } else {
+      await supabase.from('finance_time_entries').update({ approval_slack_message_id: result.ts || null }).eq('id', entry.id)
+    }
+    return result
+  } catch (error) {
+    await supabase.from('finance_time_entries').update({ approval_slack_sent_at: null }).eq('id', entry.id)
+    throw error
+  }
 }
 
 export default async function handler(req, res) {
@@ -161,7 +184,7 @@ export default async function handler(req, res) {
       if (status !== 'Draft') {
         await supabase.from('finance_approvals').insert({ time_entry_id: saved.id, level: 1, approver_name: saved.supervisor_name, status: 'Pending' })
         await notify(supabase, { userName: saved.supervisor_name, type: 'Approval required', message: `${saved.submission_number} is waiting for your approval.`, timeEntryId: saved.id })
-        try { await sendNewEntryNotification(entry) } catch (slackError) { console.error('Finance Slack notification failed:', slackError) }
+        try { await sendNewEntryNotification(entry) } catch (slackError) { console.error('Finance Slack submission notification failed:', slackError) }
       }
       return res.status(201).json({ success: true, entry })
     }
@@ -190,7 +213,11 @@ export default async function handler(req, res) {
         update.status = requestedStatus
         if (requestedStatus === 'Approved') { update.approved_by_name = currentActor.name; update.approved_at = new Date().toISOString() }
         if (requestedStatus === 'Processed') update.processed_at = new Date().toISOString()
-        if (requestedStatus === 'Rejected' || requestedStatus === 'Needs Correction') update.rejection_comment = clean(body.comment)
+        if (requestedStatus === 'Rejected' || requestedStatus === 'Needs Correction') {
+          update.rejection_comment = clean(body.comment)
+          update.approval_slack_sent_at = null
+          update.approval_slack_message_id = null
+        }
         if (requestedStatus === 'Submitted') update.status = 'Pending Approval'
       }
       if (!Object.keys(update).length) return res.status(400).json({ error: 'No changes provided.' })
@@ -202,7 +229,10 @@ export default async function handler(req, res) {
       if (requestedStatus && requestedStatus !== old.status) {
         const approvalStatus = saved.status === 'Approved' ? 'Approved' : saved.status === 'Rejected' ? 'Rejected' : saved.status === 'Needs Correction' ? 'Needs Correction' : null
         if (approvalStatus) await supabase.from('finance_approvals').insert({ time_entry_id: saved.id, level: 1, approver_name: currentActor.name, status: approvalStatus, comment: body.comment || null })
-        if (saved.status === 'Approved') await notify(supabase, { userName: saved.submitted_by_name, type: 'Submission approved', message: `${saved.submission_number} was approved by ${currentActor.name}.`, timeEntryId: saved.id })
+        if (saved.status === 'Approved') {
+          await notify(supabase, { userName: saved.submitted_by_name, type: 'Submission approved', message: `${saved.submission_number} was approved by ${currentActor.name}.`, timeEntryId: saved.id })
+          try { await sendApprovalSlackOnce(supabase, entry, currentActor.name) } catch (slackError) { console.error('Finance approval Slack notification failed:', slackError) }
+        }
         if (saved.status === 'Rejected') await notify(supabase, { userName: saved.submitted_by_name, type: 'Submission rejected', message: `${saved.submission_number} was rejected: ${body.comment}`, timeEntryId: saved.id })
         if (saved.status === 'Needs Correction') await notify(supabase, { userName: saved.submitted_by_name, type: 'Correction requested', message: `${saved.submission_number} needs correction: ${body.comment}`, timeEntryId: saved.id })
         try { await sendStatusNotification(entry, saved.status, currentActor.name, body.comment || '') } catch (slackError) { console.error('Finance Slack status notification failed:', slackError) }

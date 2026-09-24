@@ -31,66 +31,78 @@ export async function sendFinanceSlack({ text, blocks, channel }) {
   return { sent: true, ts: result.ts, channel: target }
 }
 
+async function slackMention(searchNames, fallback) {
+  try {
+    let cursor = ''
+    for (let page = 0; page < 10; page += 1) {
+      const result = await slackApi('users.list', { limit: 200, ...(cursor ? { cursor } : {}) })
+      const wanted = searchNames.map(value => value.toLowerCase())
+      const match = (result.members || []).find(user => {
+        if (user.deleted || user.is_bot) return false
+        const names = [user.real_name, user.name, user.profile?.display_name].filter(Boolean).map(value => String(value).toLowerCase())
+        return names.some(name => wanted.includes(name))
+      })
+      if (match?.id) return `<@${match.id}>`
+      cursor = result.response_metadata?.next_cursor || ''
+      if (!cursor) break
+    }
+  } catch (error) {
+    console.error('Slack user mention lookup failed:', error.message)
+  }
+  return fallback
+}
+
+export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
+  const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
+  const payrollMention = await slackMention(['tommi'], '@Tommi')
+  const hrMention = await slackMention(['hr - sarah', 'sarah'], '@HR - Sarah')
+  const url = appUrl(entry.id)
+  const total = Number(entry.regular_hours || 0) + Number(entry.overtime_hours || 0) + Number(entry.double_time_hours || 0)
+  const message = [
+    PINK_LINE,
+    '✅ *OT / TEMP TIMECARD APPROVED*',
+    PINK_LINE,
+    '',
+    `*Worker / Employee:* ${slackSafe(subject || 'Unknown')}`,
+    `*Supervisor:* ${slackSafe(entry.supervisor_name || 'Not assigned')}`,
+    `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
+    `*Work Date:* ${slackSafe(entry.work_date || 'Not set')}`,
+    `*Regular Hours:* ${entry.regular_hours || 0}`,
+    `*OT Hours:* ${entry.overtime_hours || 0}`,
+    `*DT Hours:* ${entry.double_time_hours || 0}`,
+    `*Total Hours:* ${total}`,
+    `*Approved By:* ${slackSafe(approvedBy || 'Supervisor')}`,
+    '*Approval Status:* Approved',
+    '',
+    `${payrollMention} ${hrMention} — please review this approved request.`,
+    url ? `:link: *<${url}|View Approved Request>*` : '',
+    '',
+    PINK_LINE,
+  ].filter(Boolean).join('\\n')
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: message } }]
+  return sendFinanceSlack({ text: message, blocks })
+}
+
 export async function sendNewEntryNotification(entry) {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
   const url = appUrl(entry.id)
   const text = `New ${entry.entry_type} submitted: ${subject || 'Unknown worker'} (${entry.submission_number})`
-  const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*NEW ${entry.entry_type.toUpperCase()} SUBMITTED*\n${PINK_LINE}\n\n*${slackSafe(subject)}* is waiting for supervisor review.` } },
-    { type: 'section', fields: [
-      { type: 'mrkdwn', text: `*Pay Period*\n${slackSafe(entry.period_label || 'Not set')}` },
-      { type: 'mrkdwn', text: `*Department*\n${slackSafe(entry.department_name_snapshot || 'Not set')}` },
-      { type: 'mrkdwn', text: `*Supervisor*\n${slackSafe(entry.supervisor_name || 'Not set')}` },
-      { type: 'mrkdwn', text: `*Hours*\nRegular ${entry.regular_hours} · OT ${entry.overtime_hours} · DT ${entry.double_time_hours}` },
-    ] },
-    { type: 'context', elements: [{ type: 'mrkdwn', text: `Submission *${slackSafe(entry.submission_number)}* · Submitted by ${slackSafe(entry.submitted_by_name)}` }] },
-    { type: 'section', text: { type: 'mrkdwn', text: PINK_LINE } },
-    ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : []),
-  ]
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\\n*NEW ${entry.entry_type.toUpperCase()} SUBMITTED*\\n${PINK_LINE}\\n\\n*${slackSafe(subject)}* is waiting for supervisor review.` } }, ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : [])]
   return sendFinanceSlack({ text, blocks })
 }
 
 export async function sendStatusNotification(entry, status, actorName, comment = '') {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
   const url = appUrl(entry.id)
-  const text = `${entry.submission_number} is now ${status}`
-  const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*${slackSafe(entry.submission_number)}* — *${slackSafe(status)}*\n${slackSafe(subject)} · ${slackSafe(entry.department_name_snapshot || '')}\n${PINK_LINE}` } },
-    { type: 'section', fields: [
-      { type: 'mrkdwn', text: `*Pay Period*\n${slackSafe(entry.period_label || 'Not set')}` },
-      { type: 'mrkdwn', text: `*Hours*\n${entry.regular_hours} regular · ${entry.overtime_hours} OT · ${entry.double_time_hours} DT` },
-      { type: 'mrkdwn', text: `*Updated By*\n${slackSafe(actorName)}` },
-      { type: 'mrkdwn', text: `*Comment*\n${slackSafe(comment || '—')}` },
-    ] },
-    { type: 'section', text: { type: 'mrkdwn', text: PINK_LINE } },
-    ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : []),
-  ]
+  const text = `${PINK_LINE}\\n*${slackSafe(entry.submission_number)}* — *${slackSafe(status)}*\\n${slackSafe(subject)} · ${slackSafe(entry.department_name_snapshot || '')}\\n${PINK_LINE}`
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text } }, { type: 'section', fields: [{ type: 'mrkdwn', text: `*Pay Period*\\n${slackSafe(entry.period_label || 'Not set')}` }, { type: 'mrkdwn', text: `*Hours*\\n${entry.regular_hours} regular · ${entry.overtime_hours} OT · ${entry.double_time_hours} DT` }, { type: 'mrkdwn', text: `*Updated By*\\n${slackSafe(actorName)}` }, { type: 'mrkdwn', text: `*Comment*\\n${slackSafe(comment || '—')}` }] }, ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : [])]
   return sendFinanceSlack({ text, blocks })
 }
 
 export async function sendDailyReminder() {
   const url = clean(process.env.APP_BASE_URL).replace(/\/$/, '')
-  const reminderText = [
-    PINK_LINE,
-    '*Daily Reminder: OT & Temp Sheet Submission*',
-    PINK_LINE,
-    '',
-    'Hey <!channel>!',
-    '',
-    'Just a quick reminder to *update, complete, and submit* your OT and Temp forms for today.',
-    '',
-    'Keeping these updated daily ensures smooth tracking and avoids any delays or confusion.',
-    '',
-    'Please make sure everything is filled out and submitted before the end of the day.',
-    '',
-    'Thanks for your cooperation!',
-    '',
-    PINK_LINE,
-  ].join('\\n')
-  const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text: reminderText } },
-    ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Open Timecard App', emoji: true }, url, action_id: 'finance_open_app' }] }] : []),
-  ]
+  const reminderText = [PINK_LINE, '*Daily Reminder: OT & Temp Sheet Submission*', PINK_LINE, '', 'Hey <!channel>!', '', 'Just a quick reminder to *update, complete, and submit* your OT and Temp forms for today.', '', 'Keeping these updated daily ensures smooth tracking and avoids any delays or confusion.', '', 'Please make sure everything is filled out and submitted before the end of the day.', '', 'Thanks for your cooperation!', '', PINK_LINE].join('\\n')
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: reminderText } }, ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Open Timecard App', emoji: true }, url, action_id: 'finance_open_app' }] }] : [])]
   return sendFinanceSlack({ text: reminderText, blocks })
 }
 

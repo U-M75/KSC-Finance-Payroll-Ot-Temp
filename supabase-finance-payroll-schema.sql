@@ -125,6 +125,8 @@ create table if not exists public.finance_time_entries (
   rejection_comment text,
   approved_by_name text,
   approved_at timestamptz,
+  approval_slack_sent_at timestamptz,
+  approval_slack_message_id text,
   processed_at timestamptz,
   quickbooks_id text,
   quickbooks_status text not null default 'Not Exported' check (quickbooks_status in ('Not Exported','Ready for Export','Exporting','Exported','Export Failed')),
