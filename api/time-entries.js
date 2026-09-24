@@ -235,7 +235,9 @@ export default async function handler(req, res) {
         }
         if (saved.status === 'Rejected') await notify(supabase, { userName: saved.submitted_by_name, type: 'Submission rejected', message: `${saved.submission_number} was rejected: ${body.comment}`, timeEntryId: saved.id })
         if (saved.status === 'Needs Correction') await notify(supabase, { userName: saved.submitted_by_name, type: 'Correction requested', message: `${saved.submission_number} needs correction: ${body.comment}`, timeEntryId: saved.id })
-        try { await sendStatusNotification(entry, saved.status, currentActor.name, body.comment || '') } catch (slackError) { console.error('Finance Slack status notification failed:', slackError) }
+        if (saved.status !== 'Approved') {
+          try { await sendStatusNotification(entry, saved.status, currentActor.name, body.comment || '') } catch (slackError) { console.error('Finance Slack status notification failed:', slackError) }
+        }
       }
       return res.status(200).json({ success: true, entry })
     }

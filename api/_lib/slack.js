@@ -86,11 +86,32 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
 export async function sendNewEntryNotification(entry) {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
   const url = appUrl(entry.id)
-  const text = `New ${entry.entry_type} submitted: ${subject || 'Unknown worker'} (${entry.submission_number})`
-  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `${PINK_LINE}\n*NEW ${entry.entry_type.toUpperCase()} SUBMITTED*\n${PINK_LINE}\n\n*${slackSafe(subject)}* is waiting for supervisor review.` } }, ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : [])]
-  return sendFinanceSlack({ text, blocks })
+  const total = Number(entry.regular_hours || 0) + Number(entry.overtime_hours || 0) + Number(entry.double_time_hours || 0)
+  const message = [
+    PINK_LINE,
+    `📝 *NEW ${entry.entry_type.toUpperCase()} SUBMITTED*`,
+    PINK_LINE,
+    '',
+    `*Worker / Employee:* ${slackSafe(subject || 'Unknown')}`,
+    `*Supervisor:* ${slackSafe(entry.supervisor_name || 'Not assigned')}`,
+    `*Department:* ${slackSafe(entry.department_name_snapshot || 'Not set')}`,
+    `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
+    `*Work Date:* ${slackSafe(entry.work_date || 'Not set')}`,
+    `*Regular Hours:* ${entry.regular_hours || 0}`,
+    `*OT Hours:* ${entry.overtime_hours || 0}`,
+    `*DT Hours:* ${entry.double_time_hours || 0}`,
+    `*Total Hours:* ${total}`,
+    `*Submitted By:* ${slackSafe(entry.submitted_by_name || 'Not set')}`,
+    '*Approval Status:* Pending Approval',
+    '',
+    '_This request is waiting for supervisor review._',
+    url ? `:link: *<${url}|View Submission>*` : '',
+    '',
+    PINK_LINE,
+  ].filter(Boolean).join('\n')
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: message } }]
+  return sendFinanceSlack({ text: message, blocks })
 }
-
 export async function sendStatusNotification(entry, status, actorName, comment = '') {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
   const url = appUrl(entry.id)
