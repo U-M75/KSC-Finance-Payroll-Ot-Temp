@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { generateTimecardPdf } from '../pdf/timecard.js'
 
-const ROLES = ['Admin', 'Supervisor', 'Payroll', 'Employee']
+const ROLES = ['Admin', 'Supervisor', 'Payroll', 'HR', 'Employee']
 const NAV = [
   ['dashboard', '⌂', 'Dashboard'],
   ['entries', '▤', 'OT Submissions'],
@@ -104,15 +104,15 @@ export default function App() {
 }
 
 function Login({ onLogin }) {
-  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('Supervisor')
+  const [role, setRole] = useState('Employee')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   async function submit(event) {
     event.preventDefault(); setLoading(true); setError('')
     try {
-      const data = await apiJson('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, password, role }) })
+      const data = await apiJson('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, role }) })
       onLogin(data.user)
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -122,9 +122,9 @@ function Login({ onLogin }) {
     <h1>Timecard Hub</h1>
     <p>OT, temporary-worker timecards, approvals and payroll tracking in one place.</p>
     <form onSubmit={submit}>
-      <label>Your name<input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sandra Pena" required /></label>
-      <label>Role password<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Enter your role password" required /></label>
+      <label>Username<input value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" autoComplete="username" required /></label>
       <label>Role<select value={role} onChange={e => setRole(e.target.value)}>{ROLES.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label>Password<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Enter your password" autoComplete="current-password" required /></label>
       {error && <div className="form-error">{error}</div>}
       <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open finance hub →'}</button>
     </form>
