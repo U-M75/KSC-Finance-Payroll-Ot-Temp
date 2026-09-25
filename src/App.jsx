@@ -118,15 +118,15 @@ function Login({ onLogin }) {
   }
   return <div className="login-page"><div className="login-orb pink" /><div className="login-orb blue" /><div className="login-card">
     <img src="/ksc-logo.png" alt="Kawaii Slime Company" />
-    <span className="eyebrow">Finance & Payroll Operations</span>
-    <h1>Timecard Hub</h1>
+    <span className="eyebrow">Temp Timecard & OT Form</span>
+    <h1>Temp Timecard & OT Form</h1>
     <p>OT, temporary-worker timecards, approvals and payroll tracking in one place.</p>
     <form onSubmit={submit}>
       <label>Username<input value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" autoComplete="username" required /></label>
       <label>Role<select value={role} onChange={e => setRole(e.target.value)}>{ROLES.map(item => <option key={item}>{item}</option>)}</select></label>
       <label>Password<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Enter your password" autoComplete="current-password" required /></label>
       {error && <div className="form-error">{error}</div>}
-      <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open finance hub →'}</button>
+      <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open Temp Timecard & OT Form →'}</button>
     </form>
   </div></div>
 }
@@ -135,7 +135,7 @@ function Sidebar({ page, navigate, user, onLogout }) {
   const allowed = user.role === 'Employee' ? new Set(['dashboard', 'entries', 'temp', 'approvals', 'reports']) : null
   return <aside className="sidebar">
     <div className="side-brand"><img src="/ksc-logo.png" alt="Kawaii Slime Company" /></div>
-    <div className="side-app-title"><strong>Finance Hub</strong><span>OT & Payroll Operations</span></div>
+    <div className="side-app-title"><strong>Temp Timecard & OT Form</strong><span>OT & Payroll Operations</span></div>
     <nav className="side-nav">{NAV.filter(([id]) => !allowed || allowed.has(id)).map(([id, icon, label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="side-bottom"><div className="user-chip"><div className="avatar">{String(user.name || 'U').slice(0, 1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.role}</span></div></div><button className="logout-button" onClick={onLogout}>Sign out</button></div>
   </aside>
@@ -143,7 +143,7 @@ function Sidebar({ page, navigate, user, onLogout }) {
 
 function Topbar({ user, unread, notifications, onRead }) {
   const [open, setOpen] = useState(false)
-  return <div className="topbar"><div><span className="topbar-kicker">Kawaii Slime Company</span><span className="topbar-title">Finance & Payroll</span></div><div className="topbar-actions"><div className="role-pill">{user.role}</div><button className={`notification-button ${unread ? 'has-unread' : ''}`} onClick={() => { setOpen(value => !value); onRead() }}>♡<span>{unread || ''}</span></button>{open && <div className="notification-popover"><strong>Notifications</strong>{notifications.length ? notifications.slice(0, 6).map(row => <div className={`notification-item ${row.read ? '' : 'unread'}`} key={row.id}><b>{row.notification_type}</b><span>{row.message}</span><small>{dateTime(row.created_at)}</small></div>) : <p className="muted">No notifications yet.</p>}</div>}</div></div>
+  return <div className="topbar"><div><span className="topbar-kicker">Kawaii Slime Company</span><span className="topbar-title">Temp Timecard & OT Form</span></div><div className="topbar-actions"><div className="role-pill">{user.role}</div><button className={`notification-button ${unread ? 'has-unread' : ''}`} onClick={() => { setOpen(value => !value); onRead() }}>♡<span>{unread || ''}</span></button>{open && <div className="notification-popover"><strong>Notifications</strong>{notifications.length ? notifications.slice(0, 6).map(row => <div className={`notification-item ${row.read ? '' : 'unread'}`} key={row.id}><b>{row.notification_type}</b><span>{row.message}</span><small>{dateTime(row.created_at)}</small></div>) : <p className="muted">No notifications yet.</p>}</div>}</div></div>
 }
 
 function Header({ eyebrow, title, description, actions }) {

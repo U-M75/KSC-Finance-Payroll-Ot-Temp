@@ -1,4 +1,4 @@
-# KSC Finance & Payroll / OT / Temp Agency Management App
+# Temp Timecard & OT Form
 
 A production-oriented internal workflow for employee OT submissions, temporary-worker timecards, supervisor approval, payroll processing, PDF timecards, Slack notifications and future QuickBooks export.
 
@@ -26,8 +26,6 @@ npm run dev
 Set these in Vercel. Never paste secrets into chat or commit them.
 
 ```text
-SUPABASE_URL=
-SUPABASE_SERVICE_KEY=
 BLAKELI_USERNAME=
 BLAKELI_PASSWORD=
 BLAKELI_ROLE=Admin
