@@ -11,6 +11,30 @@ function appUrl(entryId) {
   return base ? `${base}/?view=entry&id=${encodeURIComponent(entryId)}` : ''
 }
 
+function nonzeroHours(value) {
+  const number = Number(value || 0)
+  return Number.isFinite(number) && number > 0 ? number : 0
+}
+
+// Only include hour lines that actually have hours — no "0" / empty entries in Slack.
+function hourDetailLines(entry) {
+  const total = Number(entry.regular_hours || 0) + Number(entry.overtime_hours || 0) + Number(entry.double_time_hours || 0)
+  const lines = []
+  if (nonzeroHours(entry.regular_hours)) lines.push(`*Regular Hours:* ${entry.regular_hours}`)
+  if (nonzeroHours(entry.overtime_hours)) lines.push(`*OT Hours:* ${entry.overtime_hours}`)
+  if (nonzeroHours(entry.double_time_hours)) lines.push(`*DT Hours:* ${entry.double_time_hours}`)
+  lines.push(`*Total Hours:* ${total}`)
+  return lines
+}
+
+function hoursSummary(entry) {
+  const parts = []
+  if (nonzeroHours(entry.regular_hours)) parts.push(`${entry.regular_hours} regular`)
+  if (nonzeroHours(entry.overtime_hours)) parts.push(`${entry.overtime_hours} OT`)
+  if (nonzeroHours(entry.double_time_hours)) parts.push(`${entry.double_time_hours} DT`)
+  return parts.join(' · ') || '0 hours'
+}
+
 async function slackApi(method, body) {
   const token = clean(process.env.SLACK_BOT_TOKEN)
   if (!token) return { ok: false, skipped: true, error: 'SLACK_BOT_TOKEN is not configured.' }
@@ -57,7 +81,6 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
   const payrollMention = await slackMention(['tommi'], '@Tommi')
   const hrMention = await slackMention(['hr - sarah', 'sarah'], '@HR - Sarah')
   const url = appUrl(entry.id)
-  const total = Number(entry.regular_hours || 0) + Number(entry.overtime_hours || 0) + Number(entry.double_time_hours || 0)
   const message = [
     PINK_LINE,
     '✅ *OT / TEMP TIMECARD APPROVED*',
@@ -67,10 +90,7 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
     `*Supervisor:* ${slackSafe(entry.supervisor_name || 'Not assigned')}`,
     `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
     `*Work Date:* ${slackSafe(entry.work_date || 'Not set')}`,
-    `*Regular Hours:* ${entry.regular_hours || 0}`,
-    `*OT Hours:* ${entry.overtime_hours || 0}`,
-    `*DT Hours:* ${entry.double_time_hours || 0}`,
-    `*Total Hours:* ${total}`,
+    ...hourDetailLines(entry),
     `*Approved By:* ${slackSafe(approvedBy || 'Supervisor')}`,
     '*Approval Status:* Approved',
     '',
@@ -86,7 +106,6 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
 export async function sendNewEntryNotification(entry) {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
   const url = appUrl(entry.id)
-  const total = Number(entry.regular_hours || 0) + Number(entry.overtime_hours || 0) + Number(entry.double_time_hours || 0)
   const message = [
     PINK_LINE,
     `📝 *NEW ${entry.entry_type.toUpperCase()} SUBMITTED*`,
@@ -97,10 +116,7 @@ export async function sendNewEntryNotification(entry) {
     `*Department:* ${slackSafe(entry.department_name_snapshot || 'Not set')}`,
     `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
     `*Work Date:* ${slackSafe(entry.work_date || 'Not set')}`,
-    `*Regular Hours:* ${entry.regular_hours || 0}`,
-    `*OT Hours:* ${entry.overtime_hours || 0}`,
-    `*DT Hours:* ${entry.double_time_hours || 0}`,
-    `*Total Hours:* ${total}`,
+    ...hourDetailLines(entry),
     `*Submitted By:* ${slackSafe(entry.submitted_by_name || 'Not set')}`,
     '*Approval Status:* Pending Approval',
     '',
@@ -116,7 +132,7 @@ export async function sendStatusNotification(entry, status, actorName, comment =
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
   const url = appUrl(entry.id)
   const text = `${PINK_LINE}\n*${slackSafe(entry.submission_number)}* — *${slackSafe(status)}*\n${slackSafe(subject)} · ${slackSafe(entry.department_name_snapshot || '')}\n${PINK_LINE}`
-  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text } }, { type: 'section', fields: [{ type: 'mrkdwn', text: `*Pay Period*\n${slackSafe(entry.period_label || 'Not set')}` }, { type: 'mrkdwn', text: `*Hours*\n${entry.regular_hours} regular · ${entry.overtime_hours} OT · ${entry.double_time_hours} DT` }, { type: 'mrkdwn', text: `*Updated By*\n${slackSafe(actorName)}` }, { type: 'mrkdwn', text: `*Comment*\n${slackSafe(comment || '—')}` }] }, ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : [])]
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text } }, { type: 'section', fields: [{ type: 'mrkdwn', text: `*Pay Period*\n${slackSafe(entry.period_label || 'Not set')}` }, { type: 'mrkdwn', text: `*Hours*\n${hoursSummary(entry)}` }, { type: 'mrkdwn', text: `*Updated By*\n${slackSafe(actorName)}` }, { type: 'mrkdwn', text: `*Comment*\n${slackSafe(comment || '—')}` }] }, ...(url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'View Submission', emoji: true }, url, action_id: 'finance_view_entry' }] }] : [])]
   return sendFinanceSlack({ text, blocks })
 }
 
