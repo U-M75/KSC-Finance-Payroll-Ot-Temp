@@ -105,7 +105,7 @@ Use an external scheduler during testing, then configure business days and remin
 - Approval also sends a separate Slack notification mentioning Tommi and HR - Sarah when their Slack profiles are found; plain-name fallbacks are used if `users:read` is not available.
 - Approval notifications are protected against duplicate sends for the same approval.
 - Payroll can process approved records and export CSV.
-- Temp timecards use a Monday–Friday weekly pay period.
+- Temp timecards use a Monday–Sunday weekly pay period.
 - Employee OT uses a Tuesday–Monday weekly pay period.
 - Admin/Payroll can generate all 52 weekly periods for a selected year; submission forms show a matching dropdown.
 - The timecard PDF can be generated from the record detail page.

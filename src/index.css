@@ -26,3 +26,6 @@ body{margin:0;min-width:320px;background:#fff;color:var(--brown)}button,input,se
 @media(max-width:480px){.side-nav{grid-template-columns:repeat(3,minmax(0,1fr))}.topbar>div:first-child{flex-direction:column;gap:1px;align-items:flex-start}.role-pill{display:none}.hours-visual{grid-template-columns:repeat(2,1fr)}.detail-info-grid,.detail-hours{grid-template-columns:1fr}.form-buttons{grid-template-columns:1fr}.login-card{padding:25px 19px}.login-card>img{width:235px}.selected-period{align-items:flex-start;flex-wrap:wrap}.selected-period strong{width:100%;order:3}}
 
 .directory-card .directory-delete{border:1px solid #f3d4d9;background:#fff0f2;color:var(--red);border-radius:8px;padding:6px 10px;font-size:9px;font-weight:800;flex-shrink:0;letter-spacing:.3px}.directory-card .directory-delete:hover{background:var(--red);border-color:var(--red);color:#fff}
+
+.directory-card .directory-toggle{border:1px solid #eadbd4;background:#fff;color:var(--brown-soft);border-radius:8px;padding:6px 10px;font-size:9px;font-weight:800;flex-shrink:0;letter-spacing:.3px}.directory-card .directory-toggle:hover{background:var(--blue-soft);border-color:var(--blue);color:#4b8294}
+.status-badge.inactive{background:#f0f0f0;color:#999}

@@ -15,10 +15,10 @@ function weeklyPeriods(year) {
   const periods = []
   for (let index = 0; index < 52; index += 1) {
     const tempStart = addDays(monday, index * 7)
-    const tempEnd = addDays(tempStart, 4)
+    const tempEnd = addDays(tempStart, 6)
     const otStart = addDays(tempStart, 1)
     const otEnd = addDays(otStart, 6)
-    periods.push({ period_type: 'Temp Timecard', start_date: iso(tempStart), end_date: iso(tempEnd), status: 'Open', notes: `Generated weekly Mon–Fri period for ${year}.` })
+    periods.push({ period_type: 'Temp Timecard', start_date: iso(tempStart), end_date: iso(tempEnd), status: 'Open', notes: `Generated weekly Mon–Sun period for ${year}.` })
     periods.push({ period_type: 'Employee OT', start_date: iso(otStart), end_date: iso(otEnd), status: 'Open', notes: `Generated weekly Tue–Mon period for ${year}.` })
   }
   return periods
@@ -41,9 +41,32 @@ export default async function handler(req, res) {
         const year = Number(body.generate_year)
         if (!Number.isInteger(year) || year < 2020 || year > 2100) return res.status(400).json({ error: 'Enter a valid year between 2020 and 2100.' })
         const rows = weeklyPeriods(year)
-        const { data, error } = await supabase.from('finance_pay_periods').upsert(rows, { onConflict: 'period_type,start_date,end_date', ignoreDuplicates: true }).select()
-        if (error) throw error
-        return res.status(201).json({ success: true, generated: rows.length, created: data?.length || 0, skipped: rows.length - (data?.length || 0), periods: data || [] })
+        // Existing Mon–Fri temp weeks for this year are extended to Sunday so regeneration never creates overlapping weeks.
+        const { data: existingRows, error: existingError } = await supabase.from('finance_pay_periods')
+          .select('id,period_type,start_date,end_date')
+          .gte('start_date', `${year}-01-01`)
+          .lte('start_date', `${year}-12-31`)
+        if (existingError) throw existingError
+        const seen = new Set()
+        let converted = 0
+        for (const row of existingRows || []) {
+          const start = new Date(`${row.start_date}T00:00:00Z`)
+          const isMondayTempFriday = row.period_type === 'Temp Timecard' && start.getUTCDay() === 1 && row.end_date === iso(addDays(start, 4))
+          if (isMondayTempFriday) {
+            const { error } = await supabase.from('finance_pay_periods').update({ end_date: iso(addDays(start, 6)) }).eq('id', row.id)
+            if (error) throw error
+            converted += 1
+          }
+          seen.add(`${row.period_type}|${row.start_date}`)
+        }
+        const newRows = rows.filter(row => !seen.has(`${row.period_type}|${row.start_date}`))
+        let data = []
+        if (newRows.length) {
+          const insertResult = await supabase.from('finance_pay_periods').upsert(newRows, { onConflict: 'period_type,start_date,end_date', ignoreDuplicates: true }).select()
+          if (insertResult.error) throw insertResult.error
+          data = insertResult.data || []
+        }
+        return res.status(201).json({ success: true, generated: rows.length, created: data.length, skipped: rows.length - data.length, converted, periods: data })
       }
       if (!PERIOD_TYPES.includes(body.period_type || 'Temp Timecard')) return res.status(400).json({ error: 'Select Temp Timecard or Employee OT period type.' })
       if (!validDate(body.start_date) || !validDate(body.end_date)) return res.status(400).json({ error: 'Valid start and end dates are required.' })

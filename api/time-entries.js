@@ -6,7 +6,7 @@ const OPEN_STATUSES = ['Submitted', 'Pending Approval', 'Needs Correction']
 
 function periodLabel(period) {
   if (!period?.start_date || !period?.end_date) return '—'
-  const schedule = period.period_type === 'Employee OT' ? 'Tue–Mon OT' : 'Mon–Fri Temp'
+  const schedule = period.period_type === 'Employee OT' ? 'Tue–Mon OT' : 'Mon–Sun Temp'
   return `${period.start_date} → ${period.end_date} · ${schedule}`
 }
 
@@ -58,6 +58,15 @@ async function lookupNames(supabase, body) {
 
 function entryQuery(supabase) {
   return supabase.from('finance_time_entries').select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').order('created_at', { ascending: false }).limit(2000)
+}
+
+function duplicateCheckQuery(supabase, body, period, entryType) {
+  return supabase.from('finance_time_entries')
+    .select('id,submission_number,status')
+    .eq('pay_period_id', body.pay_period_id)
+    .eq('entry_type', entryType)
+    .eq('work_date', body.work_date || period.start_date)
+    .in('status', OPEN_STATUSES)
 }
 
 async function sendApprovalSlackOnce(supabase, entry, approverName) {
@@ -142,7 +151,11 @@ export default async function handler(req, res) {
       if (['Closed', 'Processed'].includes(period.status) && !isAdmin(currentActor.role)) return res.status(400).json({ error: 'This pay period is closed.' })
       if (body.work_date && (body.work_date < period.start_date || body.work_date > period.end_date)) return res.status(400).json({ error: 'Work date must be within the selected pay period.' })
 
-      const { data: existing, error: duplicateError } = await supabase.from('finance_time_entries').select('id,submission_number,status').eq('pay_period_id', body.pay_period_id).eq('entry_type', entryType).eq(entryType === 'Temp Timecard' ? 'temp_worker_id' : 'employee_id', entryType === 'Temp Timecard' ? (body.temp_worker_id || '00000000-0000-0000-0000-000000000000') : (body.employee_id || '00000000-0000-0000-0000-000000000000')).eq('work_date', body.work_date || period.start_date).in('status', OPEN_STATUSES)
+      const { data: existing, error: duplicateError } = await (entryType === 'Temp Timecard'
+        ? (body.temp_worker_id
+          ? duplicateCheckQuery(supabase, body, period, entryType).eq('temp_worker_id', body.temp_worker_id)
+          : duplicateCheckQuery(supabase, body, period, entryType).eq('temp_worker_name_snapshot', names.workerName))
+        : duplicateCheckQuery(supabase, body, period, entryType).eq('employee_id', body.employee_id || '00000000-0000-0000-0000-000000000000'))
       if (duplicateError) throw duplicateError
       if ((existing || []).length) return res.status(409).json({ error: `A similar open submission already exists: ${existing[0].submission_number}.` })
 
