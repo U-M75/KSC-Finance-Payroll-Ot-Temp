@@ -297,12 +297,22 @@ function PayPeriodsPage({ user }) {
   </>
 }
 function DirectoryPage({ user, entity, title }) {
-  const lookups = useLookups(); const [showForm, setShowForm] = useState(false); const [name, setName] = useState(''); const [message, setMessage] = useState('')
+  const lookups = useLookups(); const [showForm, setShowForm] = useState(false); const [name, setName] = useState(''); const [message, setMessage] = useState(''); const [deletingId, setDeletingId] = useState(null)
   const rows = entity === 'departments' ? lookups.departments : entity === 'agencies' ? lookups.agencies : entity === 'workers' ? lookups.workers : entity === 'supervisors' ? (lookups.supervisor_records || []) : lookups.employees
   async function addRecord(event) { event.preventDefault(); try { const record = entity === 'departments' ? { name, status: 'Active' } : entity === 'agencies' ? { name, status: 'Active' } : entity === 'workers' ? { name, status: 'Active' } : { name, status: 'Active' }; await apiJson('/api/lookups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { entity, record })) }); setName(''); setShowForm(false); setMessage('Record added.'); lookups.reload() } catch (err) { setMessage(err.message) } }
+  async function removeRecord(row) {
+    const label = row.name || 'this record'
+    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return
+    setDeletingId(row.id); setMessage('')
+    try {
+      await apiJson('/api/lookups', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { entity, id: row.id })) })
+      setMessage(`"${label}" deleted.`)
+      lookups.reload()
+    } catch (err) { setMessage(err.message) } finally { setDeletingId(null) }
+  }
   return <><Header eyebrow="Directory management" title={title} description="Keep the worker, agency, department and employee directories clean for accurate payroll records." actions={user.role === 'Admin' && <button className="primary-button" onClick={() => setShowForm(value => !value)}>+ Add {title.slice(0, -1)}</button>} />
     {message && <div className="inline-message">{message}</div>}{showForm && <form className="panel compact-form" onSubmit={addRecord}><Input label={`${title.slice(0, -1)} name`} value={name} onChange={setName} required /><button className="primary-button">Save record</button></form>}
-    <Panel title={`${rows.length} active record(s)`}>{rows.length ? <div className="directory-grid">{rows.map(row => <div className="directory-card" key={row.id}><div className="directory-avatar">{String(row.name || '—').slice(0, 1).toUpperCase()}</div><div><strong>{row.name}</strong><span>{row.status || 'Active'}{row.worker_id ? ` · ${row.worker_id}` : ''}{row.supervisor_name ? ` · ${row.supervisor_name}` : ''}{row.code ? ` · ${row.code}` : ''}</span></div><StatusBadge status={row.status || 'Active'} /></div>)}</div> : <Empty title={`No ${title.toLowerCase()} yet`} />}</Panel>
+    <Panel title={`${rows.length} active record(s)`}>{rows.length ? <div className="directory-grid">{rows.map(row => <div className="directory-card" key={row.id}><div className="directory-avatar">{String(row.name || '—').slice(0, 1).toUpperCase()}</div><div><strong>{row.name}</strong><span>{row.status || 'Active'}{row.worker_id ? ` · ${row.worker_id}` : ''}{row.supervisor_name ? ` · ${row.supervisor_name}` : ''}{row.code ? ` · ${row.code}` : ''}</span></div><StatusBadge status={row.status || 'Active'} />{user.role === 'Admin' && <button type="button" className="directory-delete" disabled={deletingId === row.id} onClick={() => removeRecord(row)}>{deletingId === row.id ? 'Deleting…' : 'Delete'}</button>}</div>)}</div> : <Empty title={`No ${title.toLowerCase()} yet`} />}</Panel>
   </>
 }
 
