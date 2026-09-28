@@ -29,3 +29,22 @@ body{margin:0;min-width:320px;background:#fff;color:var(--brown)}button,input,se
 
 .directory-card .directory-toggle{border:1px solid #eadbd4;background:#fff;color:var(--brown-soft);border-radius:8px;padding:6px 10px;font-size:9px;font-weight:800;flex-shrink:0;letter-spacing:.3px}.directory-card .directory-toggle:hover{background:var(--blue-soft);border-color:var(--blue);color:#4b8294}
 .status-badge.inactive{background:#f0f0f0;color:#999}
+
+.work-day-list{display:flex;flex-direction:column;gap:9px}
+.work-day-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:8px;align-items:end;border:1px solid var(--line);background:#fff;border-radius:11px;padding:10px}
+.work-day-row .field{margin:0}
+.day-remove{height:36px;width:36px;border-radius:9px;border:1px solid #f3d4d9;background:#fff0f2;color:var(--red);font-size:16px;font-weight:900;line-height:1}
+.day-remove:disabled{opacity:.35}
+.add-day-button{border:1px dashed var(--pink);background:#fffafd;color:var(--brown);border-radius:10px;padding:8px 12px;font-size:10px;font-weight:800;margin-top:8px}
+.add-day-button:hover{background:var(--pink-soft)}
+.day-totals{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.day-totals div{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px;text-align:center}
+.day-totals span{display:block;font-size:8px;text-transform:uppercase;font-weight:900;color:var(--brown-soft);margin-bottom:4px}
+.day-totals strong{font-size:13px;color:var(--brown)}
+.day-totals .grand{background:var(--pink-soft);border-color:var(--pink)}
+.day-breakdown{margin-top:11px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.day-breakdown-head,.day-breakdown-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:6px;padding:7px 10px;font-size:10px;align-items:center}
+.day-breakdown-head{background:var(--pink-soft);font-weight:900;text-transform:uppercase;font-size:8px;color:var(--brown)}
+.day-breakdown-row{border-top:1px solid var(--line);background:#fff;color:var(--brown)}
+.day-breakdown-row span:not(:first-child){text-align:right}
+@media(max-width:820px){.work-day-row{grid-template-columns:1fr 1fr}.day-totals{grid-template-columns:repeat(2,1fr)}}

@@ -71,6 +71,8 @@ The app uses separate username/password accounts. The selected role must match t
 3. Optional: run `supabase-finance-payroll-seed.sql` only in a demo/staging project to create the six sample workers/timecards.
 4. The SQL creates the directory tables, pay periods, time entries, approvals, audit logs, notifications and private document bucket.
 5. If demo data was already inserted and the client needs a blank handoff, run `supabase-finance-payroll-clean-all-data.sql` once. It deletes rows and stored documents but keeps the schema.
+6. Existing databases created before multi-day work dates: run `supabase-finance-payroll-work-end-date-migration.sql` once to add the optional work end date column.
+7. Existing databases created before per-day hours: run `supabase-finance-payroll-work-days-migration.sql` once to add the work days (day-by-day hours) column.
 
 ## Slack setup
 

@@ -107,6 +107,8 @@ create table if not exists public.finance_time_entries (
   department_name_snapshot text,
   supervisor_name text not null,
   work_date date,
+  work_end_date date,
+  work_days jsonb,
   assignment_location text,
   job_role text,
   worker_id_snapshot text,

@@ -35,6 +35,12 @@ function hoursSummary(entry) {
   return parts.join(' · ') || '0 hours'
 }
 
+function workDateLabel(entry) {
+  if (!entry?.work_date) return 'Not set'
+  if (entry.work_end_date && entry.work_end_date !== entry.work_date) return `${entry.work_date} → ${entry.work_end_date}`
+  return entry.work_date
+}
+
 async function slackApi(method, body) {
   const token = clean(process.env.SLACK_BOT_TOKEN)
   if (!token) return { ok: false, skipped: true, error: 'SLACK_BOT_TOKEN is not configured.' }
@@ -89,7 +95,7 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
     `*Worker / Employee:* ${slackSafe(subject || 'Unknown')}`,
     `*Supervisor:* ${slackSafe(entry.supervisor_name || 'Not assigned')}`,
     `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
-    `*Work Date:* ${slackSafe(entry.work_date || 'Not set')}`,
+    `*Work Date:* ${slackSafe(workDateLabel(entry))}`,
     ...hourDetailLines(entry),
     `*Approved By:* ${slackSafe(approvedBy || 'Supervisor')}`,
     '*Approval Status:* Approved',
@@ -115,7 +121,7 @@ export async function sendNewEntryNotification(entry) {
     `*Supervisor:* ${slackSafe(entry.supervisor_name || 'Not assigned')}`,
     `*Department:* ${slackSafe(entry.department_name_snapshot || 'Not set')}`,
     `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
-    `*Work Date:* ${slackSafe(entry.work_date || 'Not set')}`,
+    `*Work Date:* ${slackSafe(workDateLabel(entry))}`,
     ...hourDetailLines(entry),
     `*Submitted By:* ${slackSafe(entry.submitted_by_name || 'Not set')}`,
     '*Approval Status:* Pending Approval',

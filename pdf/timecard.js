@@ -42,7 +42,7 @@ export function generateTimecardPdf(entry) {
     ['Supervisor', entry.supervisor_name || '—'],
     ['Submitted By', entry.submitted_by_name || '—'],
     ['Submitted On Behalf Of', entry.submitted_on_behalf_of || 'Myself'],
-    ['Work Date', entry.work_date || '—'],
+    [entry.work_end_date && entry.work_end_date !== entry.work_date ? 'Work Dates' : 'Work Date', entry.work_end_date && entry.work_end_date !== entry.work_date ? `${entry.work_date || '—'} → ${entry.work_end_date}` : (entry.work_date || '—')],
   ]
   autoTable(doc, {
     startY: y,
@@ -72,6 +72,22 @@ export function generateTimecardPdf(entry) {
     columnStyles: { 0: { cellWidth: 160, fontStyle: 'bold' }, 1: { cellWidth: width - 244 } },
   })
   y = (doc.lastAutoTable?.finalY || y + 80) + 24
+
+  if (Array.isArray(entry.work_days) && entry.work_days.length) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: 42, right: 42 },
+      tableWidth: width - 84,
+      theme: 'grid',
+      head: [['WORK DAYS', 'REGULAR', 'OT', 'DT']],
+      body: entry.work_days.map(day => [day.date || '—', Number(day.regular_hours || 0).toFixed(2), Number(day.overtime_hours || 0).toFixed(2), Number(day.double_time_hours || 0).toFixed(2)]),
+      styles: { font: 'helvetica', fontSize: 9, cellPadding: 7, textColor: BROWN, lineColor: LINE },
+      headStyles: { fillColor: BROWN, textColor: [255,255,255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: PALE },
+      columnStyles: { 0: { cellWidth: 220, fontStyle: 'bold' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+    })
+    y = (doc.lastAutoTable?.finalY || y + 60) + 24
+  }
 
   autoTable(doc, {
     startY: y,

@@ -4,10 +4,13 @@ import { sendApprovedTimeEntryNotification, sendNewEntryNotification, sendStatus
 const ENTRY_STATUSES = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
 const OPEN_STATUSES = ['Submitted', 'Pending Approval', 'Needs Correction']
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+function weekday(value) { const d = new Date(`${String(value || '').slice(0, 10)}T00:00:00Z`); return Number.isNaN(d.getTime()) ? '' : WEEKDAYS[d.getUTCDay()] }
+
 function periodLabel(period) {
   if (!period?.start_date || !period?.end_date) return '—'
-  const schedule = period.period_type === 'Employee OT' ? 'Tue–Mon OT' : 'Mon–Sun Temp'
-  return `${period.start_date} → ${period.end_date} · ${schedule}`
+  const type = period.period_type === 'Employee OT' ? 'OT' : 'Temp'
+  return `${period.start_date} → ${period.end_date} · ${weekday(period.start_date)}–${weekday(period.end_date)} ${type}`
 }
 
 function decorate(row) {
@@ -62,11 +65,58 @@ function entryQuery(supabase) {
 
 function duplicateCheckQuery(supabase, body, period, entryType) {
   return supabase.from('finance_time_entries')
-    .select('id,submission_number,status')
+    .select('id,submission_number,status,work_date,work_end_date,work_days')
     .eq('pay_period_id', body.pay_period_id)
     .eq('entry_type', entryType)
-    .eq('work_date', body.work_date || period.start_date)
     .in('status', OPEN_STATUSES)
+}
+
+// Validates and normalises the per-day hours array. Returns { rows } or { error }.
+function parseWorkDays(raw) {
+  if (raw === undefined || raw === null) return { rows: [] }
+  if (!Array.isArray(raw)) return { error: 'Work days must be a list of day rows.' }
+  if (!raw.length) return { rows: [] }
+  if (raw.length > 62) return { error: 'A timecard can include at most 62 work days.' }
+  const rows = []
+  const seen = new Set()
+  for (const day of raw) {
+    const date = clean(day?.date)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Each work day needs a valid date.' }
+    if (seen.has(date)) return { error: `Duplicate work day: ${date}.` }
+    seen.add(date)
+    try {
+      rows.push({
+        date,
+        regular_hours: numberHours(day?.regular_hours),
+        overtime_hours: numberHours(day?.overtime_hours),
+        double_time_hours: numberHours(day?.double_time_hours),
+      })
+    } catch (error) {
+      return { error: error.message }
+    }
+  }
+  rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  return { rows }
+}
+
+function sumDays(rows, key) {
+  return Math.round(rows.reduce((total, row) => total + Number(row[key] || 0), 0) * 100) / 100
+}
+
+// Every date covered by an existing entry (day rows, single day, or a date range).
+function entryDayDates(row) {
+  if (Array.isArray(row?.work_days) && row.work_days.length) return row.work_days.map(day => clean(day?.date)).filter(Boolean)
+  if (!row?.work_date) return []
+  const dates = [row.work_date]
+  if (row.work_end_date && row.work_end_date > row.work_date) {
+    const cursor = new Date(`${row.work_date}T00:00:00Z`)
+    const end = new Date(`${row.work_end_date}T00:00:00Z`)
+    while (cursor < end) {
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+      dates.push(cursor.toISOString().slice(0, 10))
+    }
+  }
+  return dates
 }
 
 async function sendApprovalSlackOnce(supabase, entry, approverName) {
@@ -131,11 +181,20 @@ export default async function handler(req, res) {
       const entryType = clean(body.entry_type)
       if (!['Employee OT', 'Temp Timecard'].includes(entryType)) return res.status(400).json({ error: 'Select a valid submission type.' })
       if (!body.pay_period_id || !body.department_id || !clean(body.supervisor_name)) return res.status(400).json({ error: 'Pay period, department and supervisor are required.' })
-      const hours = {
-        regular_hours: numberHours(body.regular_hours),
-        overtime_hours: numberHours(body.overtime_hours),
-        double_time_hours: numberHours(body.double_time_hours),
-      }
+      const parsedDays = parseWorkDays(body.work_days)
+      if (parsedDays.error) return res.status(400).json({ error: parsedDays.error })
+      const dayRows = parsedDays.rows
+      const hours = dayRows.length
+        ? {
+            regular_hours: sumDays(dayRows, 'regular_hours'),
+            overtime_hours: sumDays(dayRows, 'overtime_hours'),
+            double_time_hours: sumDays(dayRows, 'double_time_hours'),
+          }
+        : {
+            regular_hours: numberHours(body.regular_hours),
+            overtime_hours: numberHours(body.overtime_hours),
+            double_time_hours: numberHours(body.double_time_hours),
+          }
       if (hours.regular_hours + hours.overtime_hours + hours.double_time_hours === 0 && body.confirm_zero_hours !== true) return res.status(400).json({ error: 'All hours are 0. Confirm the zero-hour submission before saving.' })
       const names = await lookupNames(supabase, body)
       if (entryType === 'Temp Timecard' && (!names.workerName || !names.agencyName)) return res.status(400).json({ error: 'Temp agency and temp worker are required.' })
@@ -149,7 +208,21 @@ export default async function handler(req, res) {
       const { data: period, error: periodError } = await supabase.from('finance_pay_periods').select('*').eq('id', body.pay_period_id).single()
       if (periodError) throw periodError
       if (['Closed', 'Processed'].includes(period.status) && !isAdmin(currentActor.role)) return res.status(400).json({ error: 'This pay period is closed.' })
-      if (body.work_date && (body.work_date < period.start_date || body.work_date > period.end_date)) return res.status(400).json({ error: 'Work date must be within the selected pay period.' })
+      let workStart
+      let workEnd
+      if (dayRows.length) {
+        for (const day of dayRows) {
+          if (day.date < period.start_date || day.date > period.end_date) return res.status(400).json({ error: `Work day ${day.date} is outside the selected pay period.` })
+        }
+        workStart = dayRows[0].date
+        workEnd = dayRows[dayRows.length - 1].date
+      } else {
+        if (body.work_date && (body.work_date < period.start_date || body.work_date > period.end_date)) return res.status(400).json({ error: 'Work date must be within the selected pay period.' })
+        workStart = body.work_date || period.start_date
+        workEnd = clean(body.work_end_date) || workStart
+        if (workEnd < workStart) return res.status(400).json({ error: 'Work end date cannot be before the work start date.' })
+        if (workEnd > period.end_date || workEnd < period.start_date) return res.status(400).json({ error: 'Work dates must be within the selected pay period.' })
+      }
 
       const { data: existing, error: duplicateError } = await (entryType === 'Temp Timecard'
         ? (body.temp_worker_id
@@ -157,7 +230,9 @@ export default async function handler(req, res) {
           : duplicateCheckQuery(supabase, body, period, entryType).eq('temp_worker_name_snapshot', names.workerName))
         : duplicateCheckQuery(supabase, body, period, entryType).eq('employee_id', body.employee_id || '00000000-0000-0000-0000-000000000000'))
       if (duplicateError) throw duplicateError
-      if ((existing || []).length) return res.status(409).json({ error: `A similar open submission already exists: ${existing[0].submission_number}.` })
+      const requestedDates = dayRows.length ? dayRows.map(day => day.date) : [workStart]
+      const conflict = (existing || []).find(row => entryDayDates(row).some(date => requestedDates.includes(date)))
+      if (conflict) return res.status(409).json({ error: `A similar open submission already exists for one of these dates: ${conflict.submission_number}.` })
 
       const { data: number, error: numberError } = await supabase.rpc('next_finance_submission_number')
       if (numberError) throw numberError
@@ -175,7 +250,9 @@ export default async function handler(req, res) {
         temp_agency_name_snapshot: names.agencyName,
         department_name_snapshot: names.departmentName,
         supervisor_name: clean(body.supervisor_name),
-        work_date: body.work_date || period.start_date,
+        work_date: workStart,
+        work_end_date: workEnd,
+        work_days: dayRows.length ? dayRows : null,
         assignment_location: body.assignment_location || null,
         job_role: body.job_role || null,
         worker_id_snapshot: names.workerId || null,
@@ -209,11 +286,34 @@ export default async function handler(req, res) {
       const oldEntry = decorate(old)
       const requestedStatus = clean(body.status)
       const update = {}
-      for (const key of ['notes', 'reason_for_ot', 'assignment_location', 'job_role', 'work_date', 'regular_hours', 'overtime_hours', 'double_time_hours', 'submitted_on_behalf_of', 'representing_name', 'representation_reason']) if (body[key] !== undefined) update[key] = body[key]
+      for (const key of ['notes', 'reason_for_ot', 'assignment_location', 'job_role', 'work_date', 'work_end_date', 'regular_hours', 'overtime_hours', 'double_time_hours', 'submitted_on_behalf_of', 'representing_name', 'representation_reason']) if (body[key] !== undefined) update[key] = body[key]
       if (body.regular_hours !== undefined) update.regular_hours = numberHours(body.regular_hours)
       if (body.overtime_hours !== undefined) update.overtime_hours = numberHours(body.overtime_hours)
       if (body.double_time_hours !== undefined) update.double_time_hours = numberHours(body.double_time_hours)
       if (update.work_date && (update.work_date < old.finance_pay_periods.start_date || update.work_date > old.finance_pay_periods.end_date)) return res.status(400).json({ error: 'Work date must be within the selected pay period.' })
+      if (body.work_days !== undefined) {
+        const parsedEdit = parseWorkDays(body.work_days)
+        if (parsedEdit.error) return res.status(400).json({ error: parsedEdit.error })
+        const editRows = parsedEdit.rows
+        if (editRows.length) {
+          for (const day of editRows) {
+            if (day.date < old.finance_pay_periods.start_date || day.date > old.finance_pay_periods.end_date) return res.status(400).json({ error: `Work day ${day.date} is outside the selected pay period.` })
+          }
+          update.work_days = editRows
+          update.work_date = editRows[0].date
+          update.work_end_date = editRows[editRows.length - 1].date
+          update.regular_hours = sumDays(editRows, 'regular_hours')
+          update.overtime_hours = sumDays(editRows, 'overtime_hours')
+          update.double_time_hours = sumDays(editRows, 'double_time_hours')
+        } else {
+          update.work_days = null
+        }
+      }
+      if (update.work_end_date !== undefined) update.work_end_date = clean(update.work_end_date) || null
+      const nextStart = update.work_date || old.work_date
+      const nextEnd = update.work_end_date !== undefined ? (update.work_end_date || nextStart) : (old.work_end_date || nextStart)
+      if (nextEnd && nextStart && nextEnd < nextStart) return res.status(400).json({ error: 'Work end date cannot be before the work start date.' })
+      if (nextEnd && (nextEnd > old.finance_pay_periods.end_date || nextEnd < old.finance_pay_periods.start_date)) return res.status(400).json({ error: 'Work dates must be within the selected pay period.' })
       if (requestedStatus && !ENTRY_STATUSES.includes(requestedStatus)) return res.status(400).json({ error: 'Invalid status.' })
 
       if (requestedStatus && requestedStatus !== old.status) {
