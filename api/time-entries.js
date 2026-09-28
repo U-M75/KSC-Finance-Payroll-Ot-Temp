@@ -1,4 +1,4 @@
-import { admin, actor, audit, canManage, clean, isAdmin, jsonError, notify, numberHours } from './_lib/db.js'
+import { admin, actor, audit, canManage, clean, isAdmin, jsonError, notify, numberHours, sameName } from './_lib/db.js'
 import { sendApprovedTimeEntryNotification, sendNewEntryNotification, sendStatusNotification } from './_lib/slack.js'
 
 const ENTRY_STATUSES = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
@@ -169,8 +169,8 @@ export default async function handler(req, res) {
       let rows = (data || []).map(decorate)
       const role = clean(req.query?.user_role)
       const userName = clean(req.query?.user_name)
-      if (role === 'Supervisor') rows = rows.filter(row => row.supervisor_name === userName || row.submitted_by_name === userName)
-      if (role === 'Employee') rows = rows.filter(row => row.submitted_by_name === userName || row.employee_name_snapshot === userName)
+      if (role === 'Supervisor') rows = rows.filter(row => sameName(row.supervisor_name, userName) || sameName(row.submitted_by_name, userName))
+      if (role === 'Employee') rows = rows.filter(row => sameName(row.submitted_by_name, userName) || sameName(row.employee_name_snapshot, userName))
       return res.status(200).json({ entries: rows })
     }
 
@@ -200,9 +200,9 @@ export default async function handler(req, res) {
       if (entryType === 'Temp Timecard' && (!names.workerName || !names.agencyName)) return res.status(400).json({ error: 'Temp agency and temp worker are required.' })
       if (entryType === 'Employee OT' && !names.employeeName) return res.status(400).json({ error: 'Employee name is required.' })
       if (currentActor.role === 'Supervisor') {
-        if (clean(body.supervisor_name) !== currentActor.name) return res.status(403).json({ error: 'Supervisors can only submit requests under their own name.' })
+        if (!sameName(body.supervisor_name, currentActor.name)) return res.status(403).json({ error: 'Supervisors can only submit requests under their own name.' })
         const assignedSupervisor = entryType === 'Temp Timecard' ? names.workerSupervisor : names.employeeSupervisor
-        if (assignedSupervisor && assignedSupervisor !== currentActor.name) return res.status(403).json({ error: 'This worker is assigned to a different supervisor.' })
+        if (assignedSupervisor && !sameName(assignedSupervisor, currentActor.name)) return res.status(403).json({ error: 'This worker is assigned to a different supervisor.' })
       }
 
       const { data: period, error: periodError } = await supabase.from('finance_pay_periods').select('*').eq('id', body.pay_period_id).single()
@@ -319,7 +319,7 @@ export default async function handler(req, res) {
       if (requestedStatus && requestedStatus !== old.status) {
         if (requestedStatus === 'Rejected' && !clean(body.comment)) return res.status(400).json({ error: 'A rejection reason is required.' })
         if (requestedStatus === 'Approved' && !['Supervisor', 'Payroll', 'Admin'].includes(currentActor.role)) return res.status(403).json({ error: 'Only the supervisor or Payroll can approve.' })
-        if (requestedStatus === 'Approved' && currentActor.role === 'Supervisor' && old.supervisor_name !== currentActor.name) return res.status(403).json({ error: 'Supervisors can only approve their own workers.' })
+        if (requestedStatus === 'Approved' && currentActor.role === 'Supervisor' && !sameName(old.supervisor_name, currentActor.name)) return res.status(403).json({ error: 'Supervisors can only approve their own workers.' })
         if (requestedStatus === 'Processed' && !canManage(currentActor.role)) return res.status(403).json({ error: 'Only Admin or Payroll can process a submission.' })
         if (requestedStatus === 'Exported to QuickBooks' && !canManage(currentActor.role)) return res.status(403).json({ error: 'Only Admin or Payroll can mark QuickBooks exports.' })
         if (['Rejected', 'Needs Correction'].includes(requestedStatus) && !['Supervisor', 'Payroll', 'Admin'].includes(currentActor.role)) return res.status(403).json({ error: 'Only an approver can return this submission.' })

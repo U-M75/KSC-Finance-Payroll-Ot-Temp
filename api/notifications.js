@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     const userName = clean(req.query?.user_name || req.body?.user_name)
     if (req.method === 'GET') {
       let query = supabase.from('finance_notifications').select('*').order('created_at', { ascending: false }).limit(100)
-      if (userName) query = query.or(`user_name.eq.${userName},user_name.is.null`)
+      if (userName) query = query.or(`user_name.ilike.${userName},user_name.is.null`)
       const { data, error } = await query
       if (error) throw error
       return res.status(200).json({ notifications: data || [] })

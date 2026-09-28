@@ -46,6 +46,7 @@ export async function notify(supabase, { userName = null, type, message, timeEnt
 
 export function canManage(role) { return ['Admin', 'Payroll'].includes(role) }
 export function isAdmin(role) { return role === 'Admin' }
+export function sameName(a, b) { const left = clean(a).toLowerCase(); const right = clean(b).toLowerCase(); return Boolean(left) && left === right }
 
 export function jsonError(res, error, status = 500) {
   console.error('Finance API error:', error)
