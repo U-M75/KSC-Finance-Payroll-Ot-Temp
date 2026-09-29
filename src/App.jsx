@@ -36,6 +36,14 @@ function periodLabel(period, includeType = false) {
   return `${period.start_date} → ${period.end_date}${includeType || period.period_type ? ` · ${schedule}` : ''}`
 }
 function currentMonth() { return new Date().toISOString().slice(0, 7) }
+function namesMatch(a, b) {
+  const left = String(a ?? '').trim().toLowerCase()
+  const right = String(b ?? '').trim().toLowerCase()
+  if (!left || !right) return false
+  if (left === right) return true
+  const [short, long] = left.length <= right.length ? [left, right] : [right, left]
+  return long.startsWith(`${short} `)
+}
 
 async function apiJson(url, options = {}) {
   const response = await fetch(url, options)

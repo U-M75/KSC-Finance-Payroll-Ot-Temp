@@ -46,7 +46,16 @@ export async function notify(supabase, { userName = null, type, message, timeEnt
 
 export function canManage(role) { return ['Admin', 'Payroll'].includes(role) }
 export function isAdmin(role) { return role === 'Admin' }
-export function sameName(a, b) { const left = clean(a).toLowerCase(); const right = clean(b).toLowerCase(); return Boolean(left) && left === right }
+export function sameName(a, b) {
+  const left = clean(a).toLowerCase()
+  const right = clean(b).toLowerCase()
+  if (!left || !right) return false
+  if (left === right) return true
+  // Allow a full name to match its shorter form at a word boundary: "Sandra" ≡ "Sandra Pena",
+  // but "Chris" does NOT match "Christopher" (no word boundary).
+  const [short, long] = left.length <= right.length ? [left, right] : [right, left]
+  return long.startsWith(`${short} `)
+}
 
 export function jsonError(res, error, status = 500) {
   console.error('Finance API error:', error)
