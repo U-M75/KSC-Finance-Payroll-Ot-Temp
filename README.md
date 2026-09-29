@@ -53,6 +53,10 @@ PAYROLL_ROLE=Payroll
 HUMAN_RESOURCES_USERNAME=human_resources
 HUMAN_RESOURCES_PASSWORD=
 HUMAN_RESOURCES_ROLE=HR
+# Optional: override a login display name so it exactly matches the names used in the
+# directory (supervisors / workers / employees), e.g. CARLA_NAME=Carla Calderon
+# CARLA_NAME=
+# SANDRA_NAME=
 APP_BASE_URL=https://your-finance-app.vercel.app
 
 SLACK_BOT_TOKEN=

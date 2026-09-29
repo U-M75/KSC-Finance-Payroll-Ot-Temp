@@ -96,6 +96,7 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
     `*Supervisor:* ${slackSafe(entry.supervisor_name || 'Not assigned')}`,
     `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
     `*Work Date:* ${slackSafe(workDateLabel(entry))}`,
+    ...workDayLines(entry),
     ...hourDetailLines(entry),
     `*Approved By:* ${slackSafe(approvedBy || 'Supervisor')}`,
     '*Approval Status:* Approved',

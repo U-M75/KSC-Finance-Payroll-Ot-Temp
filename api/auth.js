@@ -22,7 +22,8 @@ export default async function handler(req, res) {
 
     const definition = ACCOUNT_DEFINITIONS.find(([prefix]) => clean(process.env[`${prefix}_USERNAME`]).toLowerCase() === username)
     if (!definition) return res.status(401).json({ error: 'Incorrect username or password.' })
-    const [prefix, displayName] = definition
+    const [prefix, defaultName] = definition
+    const displayName = clean(process.env[`${prefix}_NAME`]) || defaultName
     const expectedPassword = clean(process.env[`${prefix}_PASSWORD`])
     const role = clean(process.env[`${prefix}_ROLE`])
     if (!expectedPassword || !role) return res.status(500).json({ error: `${prefix}_PASSWORD and ${prefix}_ROLE are not configured in Vercel.` })
