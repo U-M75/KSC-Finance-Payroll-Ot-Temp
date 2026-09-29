@@ -9,7 +9,7 @@ const PALE = [255, 240, 244]
 const LINE = [235, 220, 211]
 const CREAM = [255, 250, 245]
 
-export function generateTimecardPdf(entry) {
+export function buildTimecardDoc(entry) {
   const doc = new JsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
   const width = doc.internal.pageSize.getWidth()
   const height = doc.internal.pageSize.getHeight()
@@ -134,5 +134,58 @@ export function generateTimecardPdf(entry) {
   doc.setTextColor(...BROWN)
   doc.text('Kawaii Slime Company  •  Internal payroll record', 42, height - 26)
   doc.text(`Generated ${new Date().toLocaleString('en-US')}`, width - 42, height - 26, { align: 'right' })
-  doc.save(`${entry.entry_type === 'Temp Timecard' ? 'Temp Timecard' : 'Employee OT'} - ${subject || entry.submission_number}.pdf`)
+  return doc
+}
+
+function timecardFileName(entry, extension) {
+  const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot
+  return `${entry.entry_type === 'Temp Timecard' ? 'Temp Timecard' : 'Employee OT'} - ${subject || entry.submission_number}.${extension}`
+}
+
+export function generateTimecardPdf(entry) {
+  buildTimecardDoc(entry).save(timecardFileName(entry, 'pdf'))
+}
+
+export async function generateTimecardImage(entry) {
+  const doc = buildTimecardDoc(entry)
+  const data = new Uint8Array(doc.output('arraybuffer'))
+  const pdfjs = await import('pdfjs-dist')
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+  const pdf = await pdfjs.getDocument({ data }).promise
+  try {
+    const pages = []
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 2 })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.ceil(viewport.width)
+      canvas.height = Math.ceil(viewport.height)
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+      pages.push(canvas)
+    }
+    const width = Math.max(...pages.map(page => page.width))
+    const height = pages.reduce((sum, page) => sum + page.height, 0) + (pages.length - 1) * 12
+    const output = document.createElement('canvas')
+    output.width = width
+    output.height = height
+    const context = output.getContext('2d')
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, width, height)
+    let offsetY = 0
+    for (const page of pages) {
+      context.drawImage(page, 0, offsetY)
+      offsetY += page.height + 12
+    }
+    await new Promise(resolve => output.toBlob(blob => {
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = timecardFileName(entry, 'png')
+      link.click()
+      URL.revokeObjectURL(url)
+      resolve()
+    }, 'image/png'))
+  } finally {
+    await pdf.destroy()
+  }
 }

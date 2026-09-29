@@ -199,11 +199,6 @@ export default async function handler(req, res) {
       const names = await lookupNames(supabase, body)
       if (entryType === 'Temp Timecard' && (!names.workerName || !names.agencyName)) return res.status(400).json({ error: 'Temp agency and temp worker are required.' })
       if (entryType === 'Employee OT' && !names.employeeName) return res.status(400).json({ error: 'Employee name is required.' })
-      if (currentActor.role === 'Supervisor') {
-        if (!sameName(body.supervisor_name, currentActor.name)) return res.status(403).json({ error: 'Supervisors can only submit requests under their own name.' })
-        const assignedSupervisor = entryType === 'Temp Timecard' ? names.workerSupervisor : names.employeeSupervisor
-        if (assignedSupervisor && !sameName(assignedSupervisor, currentActor.name)) return res.status(403).json({ error: 'This worker is assigned to a different supervisor.' })
-      }
 
       const { data: period, error: periodError } = await supabase.from('finance_pay_periods').select('*').eq('id', body.pay_period_id).single()
       if (periodError) throw periodError
