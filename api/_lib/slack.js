@@ -41,6 +41,20 @@ function workDateLabel(entry) {
   return entry.work_date
 }
 
+// Per-day breakdown for Slack: one bullet per work day; zero-hour lines omitted.
+function workDayLines(entry) {
+  const days = Array.isArray(entry?.work_days) ? entry.work_days : []
+  const lines = []
+  for (const day of days) {
+    const parts = []
+    if (nonzeroHours(day.regular_hours)) parts.push(`${day.regular_hours} regular`)
+    if (nonzeroHours(day.overtime_hours)) parts.push(`${day.overtime_hours} OT`)
+    if (nonzeroHours(day.double_time_hours)) parts.push(`${day.double_time_hours} DT`)
+    if (parts.length) lines.push(`• \`${day.date}\` ${parts.join(' · ')}`)
+  }
+  return lines.length ? ['*Work Days:*', ...lines] : []
+}
+
 async function slackApi(method, body) {
   const token = clean(process.env.SLACK_BOT_TOKEN)
   if (!token) return { ok: false, skipped: true, error: 'SLACK_BOT_TOKEN is not configured.' }
@@ -59,6 +73,41 @@ export async function sendFinanceSlack({ text, blocks, channel }) {
   if (!target) return { sent: false, skipped: true, reason: 'SLACK_FINANCE_PAYROLL_CHANNEL_ID is not configured.' }
   const result = await slackApi('chat.postMessage', { channel: target, text, blocks })
   return { sent: true, ts: result.ts, channel: target }
+}
+
+async function uploadSlackFile({ channel, threadTs, dataUrl, filename, comment }) {
+  const token = clean(process.env.SLACK_BOT_TOKEN)
+  if (!token) return { ok: false, skipped: true, error: 'SLACK_BOT_TOKEN is not configured.' }
+  const match = /^data:(image\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''))
+  if (!match) throw new Error('Attachment image is not a valid image data URL.')
+  const form = new FormData()
+  form.append('channels', channel)
+  if (threadTs) form.append('thread_ts', threadTs)
+  if (comment) form.append('initial_comment', comment)
+  form.append('file', new Blob([Buffer.from(match[2], 'base64')], { type: match[1] }), filename)
+  const response = await fetch('https://slack.com/api/files.uploadV2', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data.ok) throw new Error(data.error || `Slack files.uploadV2 failed (${response.status})`)
+  return data
+}
+
+// Posts the entry's optional attached image as a thread reply under the main message.
+async function attachEntryImage(entry, slackResult) {
+  if (!entry?.attachment_image || !slackResult?.sent || !slackResult.ts) return slackResult
+  try {
+    const mime = /^data:(image\/[a-z0-9+.-]+);base64,/i.exec(entry.attachment_image)?.[1] || 'image/jpeg'
+    const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
+    await uploadSlackFile({
+      channel: slackResult.channel,
+      threadTs: slackResult.ts,
+      dataUrl: entry.attachment_image,
+      filename: `${entry.submission_number || 'attachment'}.${ext}`,
+      comment: `Attachment image for ${entry.submission_number || 'this submission'}`,
+    })
+  } catch (error) {
+    console.error('Slack image attachment upload failed:', error.message)
+  }
+  return slackResult
 }
 
 async function slackMention(searchNames, fallback) {
@@ -107,7 +156,9 @@ export async function sendApprovedTimeEntryNotification(entry, approvedBy) {
     PINK_LINE,
   ].filter(Boolean).join('\n')
   const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: message } }]
-  return sendFinanceSlack({ text: message, blocks })
+  const result = await sendFinanceSlack({ text: message, blocks })
+  await attachEntryImage(entry, result)
+  return result
 }
 
 export async function sendNewEntryNotification(entry) {
@@ -123,6 +174,7 @@ export async function sendNewEntryNotification(entry) {
     `*Department:* ${slackSafe(entry.department_name_snapshot || 'Not set')}`,
     `*Pay Period:* ${slackSafe(entry.period_label || 'Not set')}`,
     `*Work Date:* ${slackSafe(workDateLabel(entry))}`,
+    ...workDayLines(entry),
     ...hourDetailLines(entry),
     `*Submitted By:* ${slackSafe(entry.submitted_by_name || 'Not set')}`,
     '*Approval Status:* Pending Approval',
@@ -133,7 +185,9 @@ export async function sendNewEntryNotification(entry) {
     PINK_LINE,
   ].filter(Boolean).join('\n')
   const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: message } }]
-  return sendFinanceSlack({ text: message, blocks })
+  const result = await sendFinanceSlack({ text: message, blocks })
+  await attachEntryImage(entry, result)
+  return result
 }
 export async function sendStatusNotification(entry, status, actorName, comment = '') {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot

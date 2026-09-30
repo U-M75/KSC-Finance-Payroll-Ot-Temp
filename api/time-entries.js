@@ -99,6 +99,22 @@ function parseWorkDays(raw) {
   return { rows }
 }
 
+// Optional image attachment sent with a submission. Accepts image data URLs only.
+function parseAttachmentImage(raw) {
+  if (raw === undefined || raw === null || raw === '') return { value: null }
+  if (typeof raw !== 'string' || !/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(raw)) return { error: 'Attachment image must be a PNG, JPEG, WEBP or GIF.' }
+  if (raw.length > 3500000) return { error: 'Attachment image is too large. Keep it under ~3.4 MB — the app compresses images automatically.' }
+  return { value: raw }
+}
+
+// Strips the (potentially large) base64 image before storing an audit snapshot.
+function withoutImage(row) {
+  if (!row || !('attachment_image' in row)) return row
+  const copy = { ...row }
+  delete copy.attachment_image
+  return copy
+}
+
 function sumDays(rows, key) {
   return Math.round(rows.reduce((total, row) => total + Number(row[key] || 0), 0) * 100) / 100
 }
@@ -166,7 +182,7 @@ export default async function handler(req, res) {
       if (q) query = query.or(`submission_number.ilike.%${q}%,employee_name_snapshot.ilike.%${q}%,temp_worker_name_snapshot.ilike.%${q}%,temp_agency_name_snapshot.ilike.%${q}%,department_name_snapshot.ilike.%${q}%,supervisor_name.ilike.%${q}%`)
       const { data, error } = await query
       if (error) throw error
-      let rows = (data || []).map(decorate)
+      let rows = (data || []).map(decorate).map(withoutImage)
       const role = clean(req.query?.user_role)
       const userName = clean(req.query?.user_name)
       if (role === 'Supervisor') rows = rows.filter(row => sameName(row.supervisor_name, userName) || sameName(row.submitted_by_name, userName))
@@ -183,6 +199,8 @@ export default async function handler(req, res) {
       if (!body.pay_period_id || !body.department_id || !clean(body.supervisor_name)) return res.status(400).json({ error: 'Pay period, department and supervisor are required.' })
       const parsedDays = parseWorkDays(body.work_days)
       if (parsedDays.error) return res.status(400).json({ error: parsedDays.error })
+      const attachmentImage = parseAttachmentImage(body.attachment_image)
+      if (attachmentImage.error) return res.status(400).json({ error: attachmentImage.error })
       const dayRows = parsedDays.rows
       const hours = dayRows.length
         ? {
@@ -260,12 +278,13 @@ export default async function handler(req, res) {
         ...hours,
         reason_for_ot: body.reason_for_ot || null,
         notes: body.notes || null,
+        ...(attachmentImage.value ? { attachment_image: attachmentImage.value } : {}),
         status,
       }
       const { data: saved, error: insertError } = await supabase.from('finance_time_entries').insert(payload).select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').single()
       if (insertError) throw insertError
       const entry = decorate(saved)
-      await audit(supabase, { timeEntryId: saved.id, ...currentActor, action: status === 'Draft' ? 'Record created as draft' : 'Record submitted', newValue: saved, comment: body.representation_reason || null })
+      await audit(supabase, { timeEntryId: saved.id, ...currentActor, action: status === 'Draft' ? 'Record created as draft' : 'Record submitted', newValue: withoutImage(saved), comment: body.representation_reason || null })
       if (status !== 'Draft') {
         await supabase.from('finance_approvals').insert({ time_entry_id: saved.id, level: 1, approver_name: saved.supervisor_name, status: 'Pending' })
         await notify(supabase, { userName: saved.supervisor_name, type: 'Approval required', message: `${saved.submission_number} is waiting for your approval.`, timeEntryId: saved.id })
@@ -333,7 +352,7 @@ export default async function handler(req, res) {
       const { data: saved, error: updateError } = await supabase.from('finance_time_entries').update(update).eq('id', body.id).select('*, finance_pay_periods(period_type,start_date,end_date,status), finance_departments(name,code)').single()
       if (updateError) throw updateError
       const entry = decorate(saved)
-      await audit(supabase, { timeEntryId: saved.id, ...currentActor, action: requestedStatus && requestedStatus !== old.status ? `Status changed to ${saved.status}` : 'Record edited', oldValue: oldEntry, newValue: entry, comment: body.comment || null })
+      await audit(supabase, { timeEntryId: saved.id, ...currentActor, action: requestedStatus && requestedStatus !== old.status ? `Status changed to ${saved.status}` : 'Record edited', oldValue: withoutImage(oldEntry), newValue: withoutImage(entry), comment: body.comment || null })
       if (requestedStatus && requestedStatus !== old.status) {
         const approvalStatus = saved.status === 'Approved' ? 'Approved' : saved.status === 'Rejected' ? 'Rejected' : saved.status === 'Needs Correction' ? 'Needs Correction' : null
         if (approvalStatus) await supabase.from('finance_approvals').insert({ time_entry_id: saved.id, level: 1, approver_name: currentActor.name, status: approvalStatus, comment: body.comment || null })

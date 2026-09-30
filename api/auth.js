@@ -10,7 +10,6 @@ const ACCOUNT_DEFINITIONS = [
   ['SANDRA', 'Sandra'],
   ['PAYROLL', 'Payroll'],
   ['HUMAN_RESOURCES', 'Human Resources'],
-  ['SARAH', 'Sarah'],
 ]
 
 export default async function handler(req, res) {
