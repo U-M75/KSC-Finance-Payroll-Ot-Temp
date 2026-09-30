@@ -133,7 +133,6 @@ async function attachEntryImage(entry, slackResult) {
     const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
     await uploadSlackFile({
       channel: slackResult.channel,
-      threadTs: slackResult.ts,
       dataUrl: entry.attachment_image,
       filename: `${entry.submission_number || 'attachment'}.${ext}`,
       comment: `Attachment image for ${entry.submission_number || 'this submission'}`,
