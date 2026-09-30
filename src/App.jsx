@@ -20,6 +20,8 @@ const NAV = [
 const STATUS_OPTIONS = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
 // Higher-level reporting (Reports + Payroll processing) is limited to finance and main admins.
 const FINANCE_ROLES = ['Admin', 'Payroll']
+// The Reporting module also includes HR/Finance users (per client spec).
+const REPORTING_ROLES = ['Admin', 'Payroll', 'HR']
 const EMPTY_FORM = {
   entry_type: 'Temp Timecard', pay_period_id: '', department_id: '', supervisor_name: '', temp_agency_id: '', temp_worker_id: '', temp_worker_name_snapshot: '', employee_id: '',
   work_date: '', work_end_date: '', regular_hours: '0', overtime_hours: '0', double_time_hours: '0', reason_for_ot: '', notes: '', assignment_location: '', job_role: '', agency_worker_id: '',
@@ -92,7 +94,7 @@ export default function App() {
   else if (page === 'departments') content = <DirectoryPage user={user} entity="departments" title="Departments" />
   else if (page === 'supervisors') content = <DirectoryPage user={user} entity="supervisors" title="Supervisors" />
   else if (page === 'payroll' && FINANCE_ROLES.includes(user.role)) content = <PayrollPage user={user} navigate={navigate} />
-  else if (page === 'reports' && FINANCE_ROLES.includes(user.role)) content = <ReportsPage user={user} />
+  else if (page === 'reports' && REPORTING_ROLES.includes(user.role)) content = <ReportsPage user={user} />
   else if (page === 'audit') content = <AuditPage />
   else if (page === 'new-temp') content = <EntryForm user={user} initialType="Temp Timecard" navigate={navigate} setToast={setToast} />
   else if (page === 'new-ot') content = <EntryForm user={user} initialType="Employee OT" navigate={navigate} setToast={setToast} />
@@ -139,12 +141,13 @@ function Login({ onLogin }) {
 }
 
 function Sidebar({ page, navigate, user, onLogout }) {
-  const canSeeFinance = FINANCE_ROLES.includes(user.role)
+  const canSeeReports = REPORTING_ROLES.includes(user.role)
+  const canSeePayroll = FINANCE_ROLES.includes(user.role)
   const allowed = user.role === 'Employee' ? new Set(['dashboard', 'entries', 'temp', 'approvals']) : null
   return <aside className="sidebar">
     <div className="side-brand"><img src="/ksc-logo.png" alt="Kawaii Slime Company" /></div>
     <div className="side-app-title"><strong>Temp Timecard & OT Form</strong><span>OT & Payroll Operations</span></div>
-    <nav className="side-nav">{NAV.filter(([id]) => (!allowed || allowed.has(id)) && ((id !== 'reports' && id !== 'payroll') || canSeeFinance)).map(([id, icon, label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}</button>)}</nav>
+    <nav className="side-nav">{NAV.filter(([id]) => (!allowed || allowed.has(id)) && (id !== 'reports' || canSeeReports) && (id !== 'payroll' || canSeePayroll)).map(([id, icon, label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="side-bottom"><div className="user-chip"><div className="avatar">{String(user.name || 'U').slice(0, 1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.role}</span></div></div><button className="logout-button" onClick={onLogout}>Sign out</button></div>
   </aside>
 }
@@ -415,11 +418,66 @@ function PayrollPage({ user, navigate }) {
 function csvCell(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text }
 
 function ReportsPage({ user }) {
-  const periods = usePeriods(); const [periodId, setPeriodId] = useState(''); const [entries, setEntries] = useState([])
-  useEffect(() => { if (!periodId && periods.periods[0]) setPeriodId(periods.periods[0].id) }, [periods.periods, periodId])
-  useEffect(() => { if (periodId) apiJson(`/api/time-entries?pay_period_id=${periodId}&user_role=${user.role}&user_name=${encodeURIComponent(user.name)}`).then(data => setEntries(data.entries || [])) }, [periodId, user])
-  const byDepartment = Object.entries(entries.reduce((map, row) => { const key = row.department_label || 'Unknown'; map[key] = (map[key] || 0) + totalHours(row); return map }, {})).sort((a, b) => b[1] - a[1])
-  return <><Header eyebrow="Management reporting" title="Payroll reports" description="See labor hours by department, agency and status." actions={<select className="period-select" value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">Select pay period</option>{periods.periods.map(row => <option key={row.id} value={row.id}>{periodLabel(row)}</option>)}</select>} /><div className="dashboard-grid"><Panel title="Hours by department"><Bars rows={byDepartment} /></Panel><Panel title="Status breakdown"><Bars rows={Object.entries(entries.reduce((map, row) => { map[row.status] = (map[row.status] || 0) + 1; return map }, {}))} count /></Panel></div><Panel title="Agency summary"><Bars rows={Object.entries(entries.reduce((map, row) => { const key = row.agency_label || 'Employees'; map[key] = (map[key] || 0) + totalHours(row); return map }, {}))} /></Panel></>
+  const periods = usePeriods(); const [periodId, setPeriodId] = useState(''); const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState(''); const [entries, setEntries] = useState([])
+  useEffect(() => { apiJson(`/api/time-entries?user_role=${encodeURIComponent(user.role)}&user_name=${encodeURIComponent(user.name)}`).then(data => setEntries(data.entries || [])).catch(() => setEntries([])) }, [user])
+  const filtered = entries.filter(row => {
+    if (periodId && row.pay_period_id !== periodId) return false
+    const start = row.work_date || ''
+    const end = row.work_end_date || start
+    if (dateFrom && end < dateFrom) return false
+    if (dateTo && start > dateTo) return false
+    return true
+  })
+  const totals = filtered.reduce((sum, row) => ({ regular: sum.regular + Number(row.regular_hours || 0), ot: sum.ot + Number(row.overtime_hours || 0), dt: sum.dt + Number(row.double_time_hours || 0) }), { regular: 0, ot: 0, dt: 0 })
+  const totalHoursAll = totals.regular + totals.ot + totals.dt
+  function hoursBy(keyOf) { return Object.entries(filtered.reduce((map, row) => { const key = keyOf(row) || 'Unknown'; map[key] = (map[key] || 0) + totalHours(row); return map }, {})).sort((a, b) => b[1] - a[1]) }
+  const byWorker = hoursBy(row => row.subject_name)
+  const byDepartment = hoursBy(row => row.department_label)
+  const byAgency = hoursBy(row => row.entry_type === 'Temp Timecard' ? row.agency_label : 'Employees (OT)')
+  const bySupervisor = hoursBy(row => row.supervisor_name)
+  const statusRows = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks'].map(status => [status, filtered.filter(row => row.status === status).length])
+  const periodSummaries = Object.entries(filtered.reduce((map, row) => {
+    const key = row.period_label || 'Unknown period'
+    if (!map[key]) map[key] = { regular: 0, ot: 0, dt: 0, count: 0 }
+    map[key].regular += Number(row.regular_hours || 0)
+    map[key].ot += Number(row.overtime_hours || 0)
+    map[key].dt += Number(row.double_time_hours || 0)
+    map[key].count += 1
+    return map
+  }, {})).sort((a, b) => b[0].localeCompare(a[0]))
+  function exportCsv() {
+    const lines = []
+    const push = cells => lines.push(cells.map(csvCell).join(','))
+    const selected = periods.periods.find(row => row.id === periodId)
+    push(['KSC Payroll Reporting'])
+    push(['Pay period', selected ? periodLabel(selected) : 'All pay periods'])
+    push(['Date from', dateFrom || '—'])
+    push(['Date to', dateTo || '—'])
+    push([]); push(['SUMMARY']); push(['Metric', 'Hours'])
+    push(['Regular', totals.regular]); push(['OT', totals.ot]); push(['DT', totals.dt]); push(['Total', totalHoursAll]); push(['Timecards', filtered.length])
+    const section = (title, rows, headA, headB) => { push([]); push([title]); push([headA, headB]); rows.forEach(([label, value]) => push([label, value])) }
+    section('HOURS BY WORKER / EMPLOYEE', byWorker, 'Worker / Employee', 'Total Hours')
+    section('HOURS BY DEPARTMENT', byDepartment, 'Department', 'Total Hours')
+    section('HOURS BY TEMP AGENCY', byAgency, 'Agency / Employer', 'Total Hours')
+    section('HOURS BY SUPERVISOR', bySupervisor, 'Supervisor', 'Total Hours')
+    push([]); push(['PAY-PERIOD SUMMARIES']); push(['Pay Period', 'Regular', 'OT', 'DT', 'Total', 'Timecards'])
+    periodSummaries.forEach(([label, row]) => push([label, row.regular, row.ot, row.dt, row.regular + row.ot + row.dt, row.count]))
+    push([]); push(['TIMECARD STATUS']); push(['Status', 'Count'])
+    statusRows.forEach(([label, count]) => push([label, count]))
+    const blob = new Blob([[lines.join('\n')]], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `ksc-report-${periodId || 'all-periods'}.csv`; a.click(); URL.revokeObjectURL(url)
+  }
+  return <><Header eyebrow="Management reporting" title="Payroll reports" description="Higher-level summaries of timecard and OT data — hours, workers, departments, supervisors and pay periods." actions={<><select className="period-select" value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">All pay periods</option>{periods.periods.map(row => <option key={row.id} value={row.id}>{periodLabel(row)}</option>)}</select><button className="secondary-button" onClick={exportCsv}>Export CSV</button></>} />
+    <div className="filter-bar"><label className="field"><span>Date from</span><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label className="field"><span>Date to</span><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label>{(dateFrom || dateTo) && <button className="text-button" onClick={() => { setDateFrom(''); setDateTo('') }}>Clear dates</button>}</div>
+    {!filtered.length ? <Empty title="No data for this filter" text="Adjust the pay period or date range to see reporting data." /> : <>
+      <div className="stat-grid"><StatCard label="Regular Hours" value={moneyHours(totals.regular)} tone="green" /><StatCard label="OT Hours" value={moneyHours(totals.ot)} tone="gold" /><StatCard label="DT Hours" value={moneyHours(totals.dt)} tone="pink" /><StatCard label="Total Hours" value={moneyHours(totalHoursAll)} tone="blue" /><StatCard label="Timecards" value={filtered.length} /></div>
+      <div className="dashboard-grid"><Panel title="Regular vs. OT"><Bars rows={[['Regular', totals.regular], ['OT', totals.ot], ['DT', totals.dt]]} /></Panel><Panel title="Timecard status"><Bars rows={statusRows} count /></Panel></div>
+      <div className="dashboard-grid"><Panel title="Hours by employee / temp worker"><Bars rows={byWorker} /></Panel><Panel title="Hours by supervisor"><Bars rows={bySupervisor} /></Panel></div>
+      <div className="dashboard-grid"><Panel title="Hours by department"><Bars rows={byDepartment} /></Panel><Panel title="Hours by temp agency"><Bars rows={byAgency} /></Panel></div>
+      <Panel title="Weekly / pay-period summaries"><div className="table-wrap"><table className="data-table"><thead><tr>{['Pay Period', 'Regular', 'OT', 'DT', 'Total', 'Timecards'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{periodSummaries.map(([label, row]) => <tr key={label}><td className="strong-cell">{label}</td><td>{moneyHours(row.regular)}</td><td>{moneyHours(row.ot)}</td><td>{moneyHours(row.dt)}</td><td>{moneyHours(row.regular + row.ot + row.dt)}</td><td>{row.count}</td></tr>)}</tbody></table></div></Panel>
+    </>}
+  </>
 }
 function Bars({ rows, count = false }) { const max = Math.max(...rows.map(row => row[1]), 1); return rows.length ? <div className="bars">{rows.map(([label, value]) => <div className="bar-row" key={label}><div className="bar-label"><span>{label}</span><strong>{count ? value : moneyHours(value)}{count ? ' record(s)' : ' hours'}</strong></div><div className="bar-track"><i style={{ width: `${Math.max(5, value / max * 100)}%` }} /></div></div>)}</div> : <p className="muted">No data for this period.</p> }
 
