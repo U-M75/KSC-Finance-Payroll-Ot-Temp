@@ -18,6 +18,8 @@ const NAV = [
   ['audit', '◌', 'Audit Log'],
 ]
 const STATUS_OPTIONS = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
+// Higher-level reporting is limited to finance (Payroll) and main admins.
+const REPORTS_ROLES = ['Admin', 'Payroll']
 const EMPTY_FORM = {
   entry_type: 'Temp Timecard', pay_period_id: '', department_id: '', supervisor_name: '', temp_agency_id: '', temp_worker_id: '', temp_worker_name_snapshot: '', employee_id: '',
   work_date: '', work_end_date: '', regular_hours: '0', overtime_hours: '0', double_time_hours: '0', reason_for_ot: '', notes: '', assignment_location: '', job_role: '', agency_worker_id: '',
@@ -90,7 +92,7 @@ export default function App() {
   else if (page === 'departments') content = <DirectoryPage user={user} entity="departments" title="Departments" />
   else if (page === 'supervisors') content = <DirectoryPage user={user} entity="supervisors" title="Supervisors" />
   else if (page === 'payroll') content = <PayrollPage user={user} navigate={navigate} />
-  else if (page === 'reports') content = <ReportsPage user={user} />
+  else if (page === 'reports' && REPORTS_ROLES.includes(user.role)) content = <ReportsPage user={user} />
   else if (page === 'audit') content = <AuditPage />
   else if (page === 'new-temp') content = <EntryForm user={user} initialType="Temp Timecard" navigate={navigate} setToast={setToast} />
   else if (page === 'new-ot') content = <EntryForm user={user} initialType="Employee OT" navigate={navigate} setToast={setToast} />
@@ -137,11 +139,12 @@ function Login({ onLogin }) {
 }
 
 function Sidebar({ page, navigate, user, onLogout }) {
-  const allowed = user.role === 'Employee' ? new Set(['dashboard', 'entries', 'temp', 'approvals', 'reports']) : null
+  const canSeeReports = REPORTS_ROLES.includes(user.role)
+  const allowed = user.role === 'Employee' ? new Set(['dashboard', 'entries', 'temp', 'approvals']) : null
   return <aside className="sidebar">
     <div className="side-brand"><img src="/ksc-logo.png" alt="Kawaii Slime Company" /></div>
     <div className="side-app-title"><strong>Temp Timecard & OT Form</strong><span>OT & Payroll Operations</span></div>
-    <nav className="side-nav">{NAV.filter(([id]) => !allowed || allowed.has(id)).map(([id, icon, label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}</button>)}</nav>
+    <nav className="side-nav">{NAV.filter(([id]) => (!allowed || allowed.has(id)) && (id !== 'reports' || canSeeReports)).map(([id, icon, label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="side-bottom"><div className="user-chip"><div className="avatar">{String(user.name || 'U').slice(0, 1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.role}</span></div></div><button className="logout-button" onClick={onLogout}>Sign out</button></div>
   </aside>
 }
@@ -283,7 +286,8 @@ function EntryForm({ user, initialType, navigate, setToast }) {
     setSaving(true); setError('')
     try {
       const data = await apiJson('/api/time-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { ...form, save_as_draft: saveAsDraft, ...(attachment ? { attachment_image: attachment } : {}) })) })
-      setToast(saveAsDraft ? 'Draft saved successfully.' : `${data.entry.submission_number} submitted for approval.`)
+      const imageWarning = data.slack_image_error ? ` Image could not be posted to Slack: ${data.slack_image_error}` : ''
+      setToast(saveAsDraft ? 'Draft saved successfully.' : `${data.entry.submission_number} submitted for approval.${imageWarning}`)
       navigate(`entry:${data.entry.id}`)
     } catch (err) { setError(err.message) } finally { setSaving(false) }
   }

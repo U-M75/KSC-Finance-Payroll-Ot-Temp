@@ -77,23 +77,34 @@ export async function sendFinanceSlack({ text, blocks, channel }) {
 
 async function uploadSlackFile({ channel, threadTs, dataUrl, filename, comment }) {
   const token = clean(process.env.SLACK_BOT_TOKEN)
-  if (!token) return { ok: false, skipped: true, error: 'SLACK_BOT_TOKEN is not configured.' }
+  if (!token) throw new Error('SLACK_BOT_TOKEN is not configured.')
   const match = /^data:(image\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''))
   if (!match) throw new Error('Attachment image is not a valid image data URL.')
+  const bytes = Buffer.from(match[2], 'base64')
+  // Step 1: ask Slack for a temporary upload URL (files.getUploadURLExternal).
+  const upload = await slackApi('files.getUploadURLExternal', { filename, length: bytes.length })
+  if (!upload.upload_url || !upload.file_id) throw new Error('Slack did not return a file upload URL.')
+  // Step 2: POST the image bytes to that URL. Slack docs: multipart (field "filename") or raw bytes.
+  const blob = new Blob([bytes], { type: match[1] })
   const form = new FormData()
-  form.append('channels', channel)
-  if (threadTs) form.append('thread_ts', threadTs)
-  if (comment) form.append('initial_comment', comment)
-  form.append('file', new Blob([Buffer.from(match[2], 'base64')], { type: match[1] }), filename)
-  const response = await fetch('https://slack.com/api/files.uploadV2', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok || !data.ok) throw new Error(data.error || `Slack files.uploadV2 failed (${response.status})`)
-  return data
+  form.append('filename', blob, filename)
+  form.append('file', blob, filename)
+  let uploaded = await fetch(upload.upload_url, { method: 'POST', body: form })
+  if (!uploaded.ok) uploaded = await fetch(upload.upload_url, { method: 'POST', headers: { 'Content-Type': match[1] }, body: bytes })
+  if (!uploaded.ok) throw new Error(`Slack file upload failed (${uploaded.status}).`)
+  // Step 3: share the uploaded file into the thread (files.completeUploadExternal).
+  await slackApi('files.completeUploadExternal', {
+    files: JSON.stringify([{ id: upload.file_id, title: filename }]),
+    ...(channel ? { channel_id: channel } : {}),
+    ...(threadTs ? { thread_ts: threadTs } : {}),
+    ...(comment ? { initial_comment: comment } : {}),
+  })
+  return { ok: true }
 }
 
 // Posts the entry's optional attached image as a thread reply under the main message.
 async function attachEntryImage(entry, slackResult) {
-  if (!entry?.attachment_image || !slackResult?.sent || !slackResult.ts) return slackResult
+  if (!entry?.attachment_image || !slackResult?.sent || !slackResult.ts) return null
   try {
     const mime = /^data:(image\/[a-z0-9+.-]+);base64,/i.exec(entry.attachment_image)?.[1] || 'image/jpeg'
     const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
@@ -104,10 +115,11 @@ async function attachEntryImage(entry, slackResult) {
       filename: `${entry.submission_number || 'attachment'}.${ext}`,
       comment: `Attachment image for ${entry.submission_number || 'this submission'}`,
     })
+    return null
   } catch (error) {
     console.error('Slack image attachment upload failed:', error.message)
+    return error.message
   }
-  return slackResult
 }
 
 async function slackMention(searchNames, fallback) {
@@ -186,8 +198,8 @@ export async function sendNewEntryNotification(entry) {
   ].filter(Boolean).join('\n')
   const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: message } }]
   const result = await sendFinanceSlack({ text: message, blocks })
-  await attachEntryImage(entry, result)
-  return result
+  const imageError = await attachEntryImage(entry, result)
+  return { ...result, image_error: imageError || null }
 }
 export async function sendStatusNotification(entry, status, actorName, comment = '') {
   const subject = entry.entry_type === 'Temp Timecard' ? entry.temp_worker_name_snapshot : entry.employee_name_snapshot

@@ -242,6 +242,7 @@ export default async function handler(req, res) {
       const { data: number, error: numberError } = await supabase.rpc('next_finance_submission_number')
       if (numberError) throw numberError
       const status = body.save_as_draft ? 'Draft' : 'Pending Approval'
+      let slackImageError = null
       const payload = {
         submission_number: number,
         entry_type: entryType,
@@ -279,9 +280,9 @@ export default async function handler(req, res) {
       if (status !== 'Draft') {
         await supabase.from('finance_approvals').insert({ time_entry_id: saved.id, level: 1, approver_name: saved.supervisor_name, status: 'Pending' })
         await notify(supabase, { userName: saved.supervisor_name, type: 'Approval required', message: `${saved.submission_number} is waiting for your approval.`, timeEntryId: saved.id })
-        try { await sendNewEntryNotification({ ...entry, attachment_image: attachmentImage.value }) } catch (slackError) { console.error('Finance Slack submission notification failed:', slackError) }
+        try { const slackResult = await sendNewEntryNotification({ ...entry, attachment_image: attachmentImage.value }); slackImageError = slackResult?.image_error || null } catch (slackError) { console.error('Finance Slack submission notification failed:', slackError) }
       }
-      return res.status(201).json({ success: true, entry })
+      return res.status(201).json({ success: true, entry, ...(slackImageError ? { slack_image_error: slackImageError } : {}) })
     }
 
     if (req.method === 'PATCH') {
