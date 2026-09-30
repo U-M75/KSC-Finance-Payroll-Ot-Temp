@@ -68,6 +68,29 @@ async function slackApi(method, body) {
   return data
 }
 
+// The file-upload methods (files.getUploadURLExternal / files.completeUploadExternal)
+// parse URL-encoded form bodies only — JSON payloads come back as invalid_arguments.
+async function slackApiForm(method, fields) {
+  const token = clean(process.env.SLACK_BOT_TOKEN)
+  if (!token) throw new Error('SLACK_BOT_TOKEN is not configured.')
+  const body = new URLSearchParams()
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null || value === '') continue
+    body.append(key, String(value))
+  }
+  const response = await fetch(`https://slack.com/api/${method}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
+    body: body.toString(),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data.ok) {
+    const detail = (data.response_metadata?.messages || []).join(' ')
+    throw new Error(`${data.error || `Slack ${method} failed (${response.status})`}${detail ? ` — ${detail}` : ''}`)
+  }
+  return data
+}
+
 export async function sendFinanceSlack({ text, blocks, channel }) {
   const target = clean(channel || process.env.SLACK_FINANCE_PAYROLL_CHANNEL_ID)
   if (!target) return { sent: false, skipped: true, reason: 'SLACK_FINANCE_PAYROLL_CHANNEL_ID is not configured.' }
@@ -82,7 +105,7 @@ async function uploadSlackFile({ channel, threadTs, dataUrl, filename, comment }
   if (!match) throw new Error('Attachment image is not a valid image data URL.')
   const bytes = Buffer.from(match[2], 'base64')
   // Step 1: ask Slack for a temporary upload URL (files.getUploadURLExternal).
-  const upload = await slackApi('files.getUploadURLExternal', { filename, length: bytes.length })
+  const upload = await slackApiForm('files.getUploadURLExternal', { filename, length: bytes.length })
   if (!upload.upload_url || !upload.file_id) throw new Error('Slack did not return a file upload URL.')
   // Step 2: POST the image bytes to that URL. Slack docs: multipart (field "filename") or raw bytes.
   const blob = new Blob([bytes], { type: match[1] })
@@ -93,11 +116,11 @@ async function uploadSlackFile({ channel, threadTs, dataUrl, filename, comment }
   if (!uploaded.ok) uploaded = await fetch(upload.upload_url, { method: 'POST', headers: { 'Content-Type': match[1] }, body: bytes })
   if (!uploaded.ok) throw new Error(`Slack file upload failed (${uploaded.status}).`)
   // Step 3: share the uploaded file into the thread (files.completeUploadExternal).
-  await slackApi('files.completeUploadExternal', {
+  await slackApiForm('files.completeUploadExternal', {
     files: JSON.stringify([{ id: upload.file_id, title: filename }]),
-    ...(channel ? { channel_id: channel } : {}),
-    ...(threadTs ? { thread_ts: threadTs } : {}),
-    ...(comment ? { initial_comment: comment } : {}),
+    channel_id: channel,
+    thread_ts: threadTs,
+    initial_comment: comment,
   })
   return { ok: true }
 }
