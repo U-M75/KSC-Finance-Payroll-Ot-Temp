@@ -49,15 +49,34 @@ export default async function handler(req, res) {
         if (existingError) throw existingError
         const seen = new Set()
         let converted = 0
+        let otExtended = 0
+        let reclassified = 0
         for (const row of existingRows || []) {
           const start = new Date(`${row.start_date}T00:00:00Z`)
-          const isMondayTempFriday = row.period_type === 'Temp Timecard' && start.getUTCDay() === 1 && row.end_date === iso(addDays(start, 4))
+          const dayOfWeek = start.getUTCDay()
+          let typeNow = row.period_type
+          const otTwinExists = (existingRows || []).some(other => other.id !== row.id && other.period_type === 'Employee OT' && other.start_date === row.start_date)
+          // Legacy Tuesday→Monday weeks mislabelled as Temp become Employee OT periods (Tue–Mon).
+          if (typeNow === 'Temp Timecard' && dayOfWeek === 2 && row.end_date === iso(addDays(start, 6)) && !otTwinExists) {
+            const { error } = await supabase.from('finance_pay_periods').update({ period_type: 'Employee OT' }).eq('id', row.id)
+            if (error) throw error
+            typeNow = 'Employee OT'
+            reclassified += 1
+          }
+          // Existing Mon–Fri temp weeks are extended to Sunday (unchanged behaviour).
+          const isMondayTempFriday = typeNow === 'Temp Timecard' && dayOfWeek === 1 && row.end_date === iso(addDays(start, 4))
           if (isMondayTempFriday) {
             const { error } = await supabase.from('finance_pay_periods').update({ end_date: iso(addDays(start, 6)) }).eq('id', row.id)
             if (error) throw error
             converted += 1
           }
-          seen.add(`${row.period_type}|${row.start_date}`)
+          // Employee OT weeks run Tuesday → Monday — extend shorter legacy weeks.
+          if (typeNow === 'Employee OT' && dayOfWeek === 2 && row.end_date < iso(addDays(start, 6))) {
+            const { error } = await supabase.from('finance_pay_periods').update({ end_date: iso(addDays(start, 6)) }).eq('id', row.id)
+            if (error) throw error
+            otExtended += 1
+          }
+          seen.add(`${typeNow}|${row.start_date}`)
         }
         const newRows = rows.filter(row => !seen.has(`${row.period_type}|${row.start_date}`))
         let data = []
@@ -66,7 +85,7 @@ export default async function handler(req, res) {
           if (insertResult.error) throw insertResult.error
           data = insertResult.data || []
         }
-        return res.status(201).json({ success: true, generated: rows.length, created: data.length, skipped: rows.length - data.length, converted, periods: data })
+        return res.status(201).json({ success: true, generated: rows.length, created: data.length, skipped: rows.length - data.length, converted, otExtended, reclassified, periods: data })
       }
       if (!PERIOD_TYPES.includes(body.period_type || 'Temp Timecard')) return res.status(400).json({ error: 'Select Temp Timecard or Employee OT period type.' })
       if (!validDate(body.start_date) || !validDate(body.end_date)) return res.status(400).json({ error: 'Valid start and end dates are required.' })

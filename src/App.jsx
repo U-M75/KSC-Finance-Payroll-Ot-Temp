@@ -359,7 +359,7 @@ function PayPeriodsPage({ user }) {
     setGenerating(true); setMessage('')
     try {
       const data = await apiJson('/api/pay-periods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withUser(user, { generate_year: Number(year) })) })
-      setMessage(`${data.created || 0} periods created for ${year}. ${data.skipped || 0} already existed.${data.converted ? ` ${data.converted} old Mon–Fri week(s) extended to Sunday.` : ''}`)
+      setMessage(`${data.created || 0} periods created for ${year}. ${data.skipped || 0} already existed.${data.converted ? ` ${data.converted} old Mon–Fri week(s) extended to Sunday.` : ''}${data.otExtended ? ` ${data.otExtended} OT week(s) extended to Monday.` : ''}${data.reclassified ? ` ${data.reclassified} period(s) reclassified to Employee OT (Tue–Mon).` : ''}`)
       reload()
     } catch (err) { setMessage(err.message) } finally { setGenerating(false) }
   }
