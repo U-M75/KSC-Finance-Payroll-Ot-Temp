@@ -218,6 +218,10 @@ export default function OnboardingPage({ me, token }) {
                   <th>Joining date</th>
                   <th>Birthday</th>
                   <th>Anniversary</th>
+                  <th>Announcement</th>
+                  <th>Favorite snack</th>
+                  <th>Favorite slime</th>
+                  <th>Favorite color</th>
                   <th>Form</th>
                   <th>Status</th>
                   <th />
@@ -248,6 +252,10 @@ export default function OnboardingPage({ me, token }) {
                     </td>
                     <td>{formatMonthDay(e.birthday)}{e.birthday_locked && <span title="Locked after submission"> 🔒</span>}</td>
                     <td>{formatMonthDay(e.anniversary)}{e.anniversary_locked && <span title="Locked after submission"> 🔒</span>}</td>
+                    <td>{e.announcement_preference === 'private_dm' ? 'Private (DM)' : 'Public'}</td>
+                    <td>{e.favorite_snack || <span className="muted">—</span>}</td>
+                    <td>{e.favorite_slime || <span className="muted">—</span>}</td>
+                    <td>{e.favorite_color || <span className="muted">—</span>}</td>
                     <td><Pill tone={e.form_submitted ? 'good' : 'neutral'}>{e.form_submitted ? 'Submitted' : 'Pending'}</Pill></td>
                     <td><Pill tone={e.status === 'active' ? 'good' : 'bad'}>{e.status}</Pill></td>
                     <td className="actions-cell">
