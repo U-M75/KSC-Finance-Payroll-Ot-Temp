@@ -3,5 +3,11 @@
     "api/**/*.js": {
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/birthday",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }
