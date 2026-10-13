@@ -1,4 +1,4 @@
-import { clean } from './_lib/db.js'
+import { clean } from '../lib/finance/db.js'
 
 // Diagnostic endpoint: open /api/slack-health in the browser to see why image
 // uploads may fail (token, channel, files:write scope). Never returns secrets.

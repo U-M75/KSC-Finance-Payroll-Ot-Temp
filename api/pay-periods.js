@@ -1,4 +1,4 @@
-import { admin, clean, isAdmin, jsonError } from './_lib/db.js'
+import { admin, clean, isAdmin, jsonError } from '../lib/finance/db.js'
 
 const PERIOD_TYPES = ['Temp Timecard', 'Employee OT']
 

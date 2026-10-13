@@ -1,4 +1,4 @@
-import { admin, actor, audit, canManage, clean, jsonError } from './_lib/db.js'
+import { admin, actor, audit, canManage, clean, jsonError } from '../lib/finance/db.js'
 
 export default async function handler(req, res) {
   try {
