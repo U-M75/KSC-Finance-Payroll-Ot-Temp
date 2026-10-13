@@ -127,3 +127,33 @@ Use an external scheduler during testing, then configure business days and remin
 4. Add the environment variables above.
 5. Deploy and test login, pay-period creation, a timecard, approval, PDF and CSV export.
 6. Configure the Slack channel notification variables and reminder scheduler only after the app URL is live. Interactive Slack approval buttons are intentionally postponed.
+
+## Kawaii HQ: Birthday & Anniversary
+
+The login page has two tabs: **Finance & Payroll** and **Birthday & Anniversary**. Birthday sign-in uses the same username/password accounts as Finance (Admin, HR, Payroll) plus an IT account. Finance Supervisors do not get access.
+
+Roles: Admin and IT have full access. HR can edit employees, approve joining dates and manage onboarding. Payroll can view only.
+
+Birthday data lives in a separate Supabase project.
+
+### Birthday setup (Vercel environment variables)
+
+```text
+HQ_SUPABASE_URL=            # Kawaii HQ Supabase project URL
+HQ_SUPABASE_SERVICE_KEY=    # service_role key of that project (server only)
+HQ_SESSION_SECRET=          # long random string; signs sign-in tokens
+IT_USERNAME=
+IT_PASSWORD=
+IT_ROLE=IT
+SLACK_SIGNING_SECRET=
+SLACK_CHANNEL_KSC_CHAT_ROOM=
+SLACK_CHANNEL_DISNEY_INSIGHTS=
+SLACK_CHANNEL_ONBOARDING_INSIGHTS=
+SLACK_HR_APPROVER_USER_ID=
+```
+
+`SLACK_BOT_TOKEN` and `APP_BASE_URL` are shared with the Finance setup. `CRON_SECRET` is used by the birthday cron jobs.
+
+Run `supabase/kawaii-hq-birthday-schema.sql` once in the Kawaii HQ Supabase project, then import the employee data.
+
+Slack Events request URL: `https://YOUR-APP/api/birthday?route=slack`. Slack interactivity URL: the same address.

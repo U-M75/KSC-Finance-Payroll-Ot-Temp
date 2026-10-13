@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { generateTimecardPdf, generateTimecardImage } from '../pdf/timecard.js'
 
 const ROLES = ['Admin', 'Supervisor', 'Payroll', 'HR']
@@ -55,8 +55,10 @@ async function apiJson(url, options = {}) {
 
 function withUser(user, body = {}) { return { ...body, user_name: user?.name, user_role: user?.role } }
 
+const BirthdayApp = lazy(() => import('./birthday/BirthdayApp.jsx'))
+
 export default function App() {
-  const [birthdayUser, setBirthdayUser] = useState(() => { try { return JSON.parse(localStorage.getItem('kawaii_hq_birthday_user') || 'null') } catch { return null } })
+  const [birthdayUser, setBirthdayUser] = useState(() => { try { return JSON.parse(localStorage.getItem('kawaii_hq_birthday_session') || 'null') } catch { return null } })
   const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('ksc_finance_user') || 'null') } catch { return null } })
   const [page, setPage] = useState(() => {
     const params = new URLSearchParams(window.location.search)
@@ -82,8 +84,8 @@ export default function App() {
     setNotifications(rows => rows.map(row => ({ ...row, read: true })))
   }
 
-  if (!user && birthdayUser) return <BirthdayShell user={birthdayUser} onLogout={() => { localStorage.removeItem('kawaii_hq_birthday_user'); setBirthdayUser(null) }} />
-  if (!user) return <Login onLogin={login} onBirthdayLogin={(u) => { localStorage.setItem('kawaii_hq_birthday_user', JSON.stringify(u)); setBirthdayUser(u) }} />
+  if (!user && birthdayUser) return <Suspense fallback={<div className="login-page"><div className="login-card">Loading…</div></div>}><BirthdayApp token={birthdayUser.token} onLogout={() => { localStorage.removeItem('kawaii_hq_birthday_session'); setBirthdayUser(null) }} /></Suspense>
+  if (!user) return <Login onLogin={login} onBirthdayLogin={(session) => { localStorage.setItem('kawaii_hq_birthday_session', JSON.stringify(session)); setBirthdayUser(session) }} />
   let content
   if (page === 'dashboard') content = <Dashboard user={user} navigate={navigate} />
   else if (page === 'entries') content = <EntriesPage user={user} navigate={navigate} type="all" />
@@ -135,8 +137,8 @@ function BirthdayLogin({ onLogin }) {
   async function submit(event) {
     event.preventDefault(); setLoading(true); setError('')
     try {
-      const data = await apiJson('/api/birthday-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
-      onLogin(data.user)
+      const data = await apiJson('/api/birthday?route=login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
+      onLogin({ token: data.token, user: data.user })
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
   return <form onSubmit={submit}>
@@ -146,16 +148,6 @@ function BirthdayLogin({ onLogin }) {
     {error && <div className="form-error">{error}</div>}
     <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open Birthday & Anniversary →'}</button>
   </form>
-}
-
-function BirthdayShell({ user, onLogout }) {
-  return <div className="login-page"><div className="login-card">
-    <img src="/ksc-logo.png" alt="Kawaii Slime Company" />
-    <span className="eyebrow">Kawaii HQ · Birthday & Anniversary</span>
-    <h1>Welcome, {user.name}</h1>
-    <p>Signed in as <strong>{user.role}</strong>. The birthday and anniversary tools are being added next.</p>
-    <button className="primary-button" onClick={onLogout}>Sign out</button>
-  </div></div>
 }
 
 function FinanceLogin({ onLogin }) {
