@@ -1,5 +1,5 @@
-import { admin, clean, jsonError } from './_lib/db.js'
-import { sendDailyReminder, sendFinanceSlack } from './_lib/slack.js'
+import { admin, clean, jsonError } from '../lib/finance/db.js'
+import { sendDailyReminder, sendFinanceSlack } from '../lib/finance/slack.js'
 
 function authorized(req) {
   const secret = clean(process.env.CRON_SECRET)

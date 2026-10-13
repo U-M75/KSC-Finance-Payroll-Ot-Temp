@@ -1,4 +1,4 @@
-import { admin, actor, audit, canManage, clean, jsonError, numberHours } from './_lib/db.js'
+import { admin, actor, audit, canManage, clean, jsonError, numberHours } from '../lib/finance/db.js'
 
 const CHANNEL_ENV = 'SLACK_FINANCE_PAYROLL_CHANNEL_ID'
 
