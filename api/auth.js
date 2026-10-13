@@ -1,4 +1,4 @@
-import { clean, jsonError } from '../lib/finance/db.js'
+import { clean, jsonError } from './_lib/db.js'
 
 const ACCOUNT_DEFINITIONS = [
   ['BLAKELI', 'Blakeli'],

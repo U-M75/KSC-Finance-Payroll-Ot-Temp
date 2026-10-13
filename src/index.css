@@ -48,13 +48,3 @@ body{margin:0;min-width:320px;background:#fff;color:var(--brown)}button,input,se
 .day-breakdown-row{border-top:1px solid var(--line);background:#fff;color:var(--brown)}
 .day-breakdown-row span:not(:first-child){text-align:right}
 @media(max-width:820px){.work-day-row{grid-template-columns:1fr 1fr}.day-totals{grid-template-columns:repeat(2,1fr)}}
-
-/* Kawaii HQ login tabs */
-.product-tabs { display: flex; gap: 8px; margin: 14px 0 6px; }
-.product-tabs button { flex: 1; padding: 10px 12px; border-radius: 999px; border: 1px solid #FFA8BD; background: #FFE6F0; color: #8A5D3B; font-weight: 700; cursor: pointer; }
-.product-tabs button.active { background: #FFA8BD; color: #fff; }
-
-/* Kawaii HQ login tabs */
-.product-tabs { display: flex; gap: 8px; margin: 14px 0 6px; }
-.product-tabs button { flex: 1; padding: 10px 12px; border-radius: 999px; border: 1px solid #FFA8BD; background: #FFE6F0; color: #8A5D3B; font-weight: 700; cursor: pointer; }
-.product-tabs button.active { background: #FFA8BD; color: #fff; }

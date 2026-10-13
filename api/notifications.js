@@ -1,4 +1,4 @@
-import { admin, clean, jsonError } from '../lib/finance/db.js'
+import { admin, clean, jsonError } from './_lib/db.js'
 
 export default async function handler(req, res) {
   try {

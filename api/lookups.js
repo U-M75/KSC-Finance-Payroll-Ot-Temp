@@ -1,4 +1,4 @@
-import { admin, clean, isAdmin, jsonError, audit } from '../lib/finance/db.js'
+import { admin, clean, isAdmin, jsonError, audit } from './_lib/db.js'
 
 const TABLES = {
   departments: 'finance_departments',

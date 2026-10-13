@@ -1,4 +1,4 @@
-import { admin, actor, audit, canManage, clean, jsonError, numberHours } from '../lib/finance/db.js'
+import { admin, actor, audit, canManage, clean, jsonError, numberHours } from './_lib/db.js'
 
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) }
 function asNumber(value) { return numberHours(value === '' || value === null || value === undefined ? 0 : value) }
