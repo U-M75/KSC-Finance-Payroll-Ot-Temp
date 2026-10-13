@@ -1,5 +1,5 @@
-import { admin, actor, audit, canManage, clean, isAdmin, jsonError, notify, numberHours, sameName } from '../lib/finance/db.js'
-import { sendApprovedTimeEntryNotification, sendNewEntryNotification, sendStatusNotification } from '../lib/finance/slack.js'
+import { admin, actor, audit, canManage, clean, isAdmin, jsonError, notify, numberHours, sameName } from './_lib/db.js'
+import { sendApprovedTimeEntryNotification, sendNewEntryNotification, sendStatusNotification } from './_lib/slack.js'
 
 const ENTRY_STATUSES = ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Rejected', 'Needs Correction', 'Processed', 'Exported to QuickBooks']
 const OPEN_STATUSES = ['Submitted', 'Pending Approval', 'Needs Correction']
