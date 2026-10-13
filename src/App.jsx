@@ -57,7 +57,6 @@ function withUser(user, body = {}) { return { ...body, user_name: user?.name, us
 
 export default function App() {
   const [birthdayUser, setBirthdayUser] = useState(() => { try { return JSON.parse(localStorage.getItem('kawaii_hq_birthday_user') || 'null') } catch { return null } })
-  if (!user && birthdayUser) return <BirthdayShell user={birthdayUser} onLogout={() => { localStorage.removeItem('kawaii_hq_birthday_user'); setBirthdayUser(null) }} />
   const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('ksc_finance_user') || 'null') } catch { return null } })
   const [page, setPage] = useState(() => {
     const params = new URLSearchParams(window.location.search)
@@ -83,6 +82,7 @@ export default function App() {
     setNotifications(rows => rows.map(row => ({ ...row, read: true })))
   }
 
+  if (!user && birthdayUser) return <BirthdayShell user={birthdayUser} onLogout={() => { localStorage.removeItem('kawaii_hq_birthday_user'); setBirthdayUser(null) }} />
   if (!user) return <Login onLogin={login} onBirthdayLogin={(u) => { localStorage.setItem('kawaii_hq_birthday_user', JSON.stringify(u)); setBirthdayUser(u) }} />
   let content
   if (page === 'dashboard') content = <Dashboard user={user} navigate={navigate} />
