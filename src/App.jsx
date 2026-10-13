@@ -56,6 +56,8 @@ async function apiJson(url, options = {}) {
 function withUser(user, body = {}) { return { ...body, user_name: user?.name, user_role: user?.role } }
 
 export default function App() {
+  const [birthdayUser, setBirthdayUser] = useState(() => { try { return JSON.parse(localStorage.getItem('kawaii_hq_birthday_user') || 'null') } catch { return null } })
+  if (!user && birthdayUser) return <BirthdayShell user={birthdayUser} onLogout={() => { localStorage.removeItem('kawaii_hq_birthday_user'); setBirthdayUser(null) }} />
   const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('ksc_finance_user') || 'null') } catch { return null } })
   const [page, setPage] = useState(() => {
     const params = new URLSearchParams(window.location.search)
@@ -81,7 +83,7 @@ export default function App() {
     setNotifications(rows => rows.map(row => ({ ...row, read: true })))
   }
 
-  if (!user) return <Login onLogin={login} />
+  if (!user) return <Login onLogin={login} onBirthdayLogin={(u) => { localStorage.setItem('kawaii_hq_birthday_user', JSON.stringify(u)); setBirthdayUser(u) }} />
   let content
   if (page === 'dashboard') content = <Dashboard user={user} navigate={navigate} />
   else if (page === 'entries') content = <EntriesPage user={user} navigate={navigate} type="all" />
@@ -112,7 +114,51 @@ export default function App() {
   </div>
 }
 
-function Login({ onLogin }) {
+function Login({ onLogin, onBirthdayLogin }) {
+  const [product, setProduct] = useState('finance')
+  return <div className="login-page"><div className="login-orb pink" /><div className="login-orb blue" /><div className="login-card">
+    <img src="/ksc-logo.png" alt="Kawaii Slime Company" />
+    <span className="eyebrow">Kawaii HQ</span>
+    <div className="product-tabs" role="tablist">
+      <button type="button" role="tab" aria-selected={product === 'finance'} className={product === 'finance' ? 'active' : ''} onClick={() => setProduct('finance')}>Finance & Payroll</button>
+      <button type="button" role="tab" aria-selected={product === 'birthday'} className={product === 'birthday' ? 'active' : ''} onClick={() => setProduct('birthday')}>Birthday & Anniversary</button>
+    </div>
+    {product === 'finance' ? <FinanceLogin onLogin={onLogin} /> : <BirthdayLogin onLogin={onBirthdayLogin} />}
+  </div></div>
+}
+
+function BirthdayLogin({ onLogin }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  async function submit(event) {
+    event.preventDefault(); setLoading(true); setError('')
+    try {
+      const data = await apiJson('/api/birthday-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
+      onLogin(data.user)
+    } catch (err) { setError(err.message) } finally { setLoading(false) }
+  }
+  return <form onSubmit={submit}>
+    <p>Birthday and anniversary shoutouts for Kawaii Slime Company. Sign in with your Admin, HR, Payroll or IT account.</p>
+    <label>Username<input value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" autoComplete="username" required /></label>
+    <label>Password<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Enter your password" autoComplete="current-password" required /></label>
+    {error && <div className="form-error">{error}</div>}
+    <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open Birthday & Anniversary →'}</button>
+  </form>
+}
+
+function BirthdayShell({ user, onLogout }) {
+  return <div className="login-page"><div className="login-card">
+    <img src="/ksc-logo.png" alt="Kawaii Slime Company" />
+    <span className="eyebrow">Kawaii HQ · Birthday & Anniversary</span>
+    <h1>Welcome, {user.name}</h1>
+    <p>Signed in as <strong>{user.role}</strong>. The birthday and anniversary tools are being added next.</p>
+    <button className="primary-button" onClick={onLogout}>Sign out</button>
+  </div></div>
+}
+
+function FinanceLogin({ onLogin }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('Supervisor')
@@ -125,19 +171,14 @@ function Login({ onLogin }) {
       onLogin(data.user)
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
-  return <div className="login-page"><div className="login-orb pink" /><div className="login-orb blue" /><div className="login-card">
-    <img src="/ksc-logo.png" alt="Kawaii Slime Company" />
-    <span className="eyebrow">Temp Timecard & OT Form</span>
-    <h1>Temp Timecard & OT Form</h1>
+  return <form onSubmit={submit}>
     <p>OT, temporary-worker timecards, approvals and payroll tracking in one place.</p>
-    <form onSubmit={submit}>
       <label>Username<input value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" autoComplete="username" required /></label>
       <label>Role<select value={role} onChange={e => setRole(e.target.value)}>{ROLES.map(item => <option key={item}>{item}</option>)}</select></label>
       <label>Password<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Enter your password" autoComplete="current-password" required /></label>
       {error && <div className="form-error">{error}</div>}
-      <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open Temp Timecard & OT Form →'}</button>
-    </form>
-  </div></div>
+    <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Open Finance & Payroll →'}</button>
+  </form>
 }
 
 function Sidebar({ page, navigate, user, onLogout }) {
