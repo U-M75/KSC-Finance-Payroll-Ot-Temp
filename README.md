@@ -152,7 +152,7 @@ SLACK_CHANNEL_ONBOARDING_INSIGHTS=
 SLACK_HR_APPROVER_USER_ID=
 ```
 
-`SLACK_BOT_TOKEN` and `APP_BASE_URL` are shared with the Finance setup. `CRON_SECRET` is used by the birthday cron jobs.
+`SLACK_BOT_TOKEN` and `APP_BASE_URL` are shared with the Finance setup. `CRON_SECRET` is used by the birthday cron job (runs daily at 08:00 Karachi time: shoutouts, then digest).
 
 Run `supabase/kawaii-hq-birthday-schema.sql` once in the Kawaii HQ Supabase project, then import the employee data.
 

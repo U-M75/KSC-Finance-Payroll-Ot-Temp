@@ -6,12 +6,8 @@
   },
   "crons": [
     {
-      "path": "/api/birthday?route=cron&job=milestones",
+      "path": "/api/birthday",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/birthday?route=cron&job=digest",
-      "schedule": "10 3 * * *"
     }
   ]
 }
