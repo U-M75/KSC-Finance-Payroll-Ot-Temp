@@ -100,8 +100,9 @@ footer{border-top:1px solid #efe0da;padding-top:18px}
 .danger.ghost{background:#fff;color:#a84d5e;border:1px solid #f0c7cf;padding:9px 12px}
 .check-row{display:flex;gap:10px;align-items:flex-start;font-size:12px;margin:14px 0 4px;line-height:1.4}
 .check-row input{margin-top:2px}
-.modal-wide{max-width:780px}
+.modal-wide{max-width:650px;width:min(650px,100%)}
 .modal-small{max-width:460px}
+.modal{max-height:calc(100vh - 40px);overflow-y:auto}
 .modal-actions.split{justify-content:space-between;align-items:center}
 .meta-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:6px}
