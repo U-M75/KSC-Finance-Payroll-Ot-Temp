@@ -11,6 +11,7 @@ import { currentSession, describeMe } from '../lib/birthday/auth.js'
 import { methodNotAllowed, fail, clean } from '../lib/birthday/env.js'
 import { readRawBody } from '../lib/birthday/slack.js'
 import employeesHandler from '../lib/birthday/handlers/employees.js'
+import onboardHandler from '../lib/birthday/handlers/onboard.js'
 import onboardingHandler from '../lib/birthday/handlers/onboarding.js'
 import slackHandler from '../lib/birthday/handlers/slack-events.js'
 import milestonesHandler from '../lib/birthday/handlers/milestones.js'
@@ -78,6 +79,7 @@ export default async function handler(req, res) {
       if (!session) return res.status(401).json({ error: 'Your session has expired. Please sign in again.' })
       return res.status(200).json({ me: describeMe(session) })
     }
+    if (route === 'onboard') return onboardHandler(req, res)
     if (route === 'employees') return employeesHandler(req, res)
     if (route === 'onboarding') return onboardingHandler(req, res)
     return res.status(404).json({ error: 'Unknown route.' })

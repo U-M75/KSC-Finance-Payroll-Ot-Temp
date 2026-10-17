@@ -4,6 +4,9 @@
       "maxDuration": 30
     }
   },
+  "rewrites": [
+    { "source": "/onboard", "destination": "/index.html" }
+  ],
   "crons": [
     {
       "path": "/api/birthday",
